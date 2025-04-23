@@ -90,4 +90,4 @@ go run main.go -l 3 -s .li -p D -r '^[aeiou]+$'
 
 ## 许可证
 
-本项目采用MIT许可证 - 详见LICENSE文件。 
+本项目采用GNU AFFERO GENERAL PUBLIC LICENSE许可证 - 详见LICENSE文件。 
