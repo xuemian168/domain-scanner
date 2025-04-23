@@ -1,3 +1,5 @@
+English | [中文](./README.zh.md)
+
 # Domain Scanner
 
 A powerful and flexible domain name availability checker written in Go. This tool helps you find available domain names based on various patterns and filters.
