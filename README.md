@@ -2,25 +2,28 @@ English | [中文](./README.zh.md)
 
 # Domain Scanner
 
-A powerful and flexible domain name availability checker written in Go. This tool helps you find available domain names based on various patterns and filters.
+A powerful domain name availability checker written in Go. This tool helps you find available domain names by checking multiple registration indicators and providing detailed verification results.
 
 ## Features
 
-- Check domain availability using DNS and WHOIS lookups
-- Generate domains based on different patterns:
-  - Pure numbers (e.g., 123.li)
-  - Pure letters (e.g., abc.li)
-  - Alphanumeric combinations (e.g., a1b.li)
-- Advanced filtering using regular expressions
-- Save results to separate files for available and registered domains
-- Configurable delay between queries to avoid rate limiting
+- **Multi-method Verification**: Checks domain availability using multiple methods:
+  - DNS records (NS, A, MX)
+  - WHOIS information
+  - SSL certificate verification
+- **Advanced Filtering**: Filter domains using regular expressions
+- **Concurrent Processing**: Multi-threaded domain checking with configurable worker count
+- **Smart Error Handling**: Automatic retry mechanism for failed queries
+- **Detailed Results**: Shows verification signatures for registered domains
+- **Progress Tracking**: Real-time progress display with current/total count
+- **File Output**: Saves results to separate files for available and registered domains
+- **Configurable Delay**: Adjustable delay between queries to prevent rate limiting
 
 ## Installation
 
 ```bash
 git clone https://github.com/xuemian168/domain-scanner.git
 cd domain-scanner
-go mod tidy
+go mod download
 ```
 
 ## Usage
@@ -39,50 +42,59 @@ go run main.go [options]
   - `a`: Alphanumeric (e.g., a1b.li)
 - `-r string`: Regex filter for domain names
 - `-delay int`: Delay between queries in milliseconds (default: 1000)
+- `-workers int`: Number of concurrent workers (default: 10)
+- `-show-registered`: Show registered domains in output (default: false)
 - `-h`: Show help information
 
 ### Examples
 
-1. Check 3-letter .li domains:
+1. Check 3-letter .li domains with 20 workers:
 ```bash
-go run main.go -l 3 -s .li -p D
+go run main.go -l 3 -s .li -p D -workers 20
 ```
 
-2. Check 3-digit .li domains:
+2. Check domains with custom delay and workers:
 ```bash
-go run main.go -l 3 -s .li -p d
+go run main.go -l 3 -s .li -p D -delay 500 -workers 15
 ```
 
-3. Check domains containing 'abc':
+3. Show both available and registered domains:
 ```bash
-go run main.go -l 5 -s .li -p D -r '.*abc.*'
+go run main.go -l 3 -s .li -p D -show-registered
 ```
 
-4. Check domains starting with 'a' and ending with 'z':
+4. Use regex filter for specific patterns:
 ```bash
-go run main.go -l 4 -s .li -p D -r '^a.*z$'
+go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$"
 ```
 
-5. Check domains containing only vowels:
-```bash
-go run main.go -l 3 -s .li -p D -r '^[aeiou]+$'
+## Output Format
+
+### Progress Display
+```
+[1/100] Domain abc.com is AVAILABLE!
+[2/100] Domain xyz.com is REGISTERED [DNS_NS, WHOIS]
+[3/100] Domain 123.com is REGISTERED [DNS_A, SSL]
 ```
 
-## Output
+### Verification Signatures
+- `DNS_NS`: Domain has name server records
+- `DNS_A`: Domain has IP address records
+- `DNS_MX`: Domain has mail server records
+- `WHOIS`: Domain is registered according to WHOIS
+- `SSL`: Domain has a valid SSL certificate
 
-The program generates two output files:
-- `available_domains_[pattern]_[length]_[suffix].txt`
-- `registered_domains_[pattern]_[length]_[suffix].txt`
+### Output Files
+- Available domains: `available_domains_[pattern]_[length]_[suffix].txt`
+- Registered domains: `registered_domains_[pattern]_[length]_[suffix].txt`
 
-## Regular Expression Examples
+## Error Handling
 
-1. `^a.*` - Domains starting with 'a'
-2. `.*z$` - Domains ending with 'z'
-3. `^[0-9]+$` - Pure numeric domains
-4. `^[a-z]+$` - Pure alphabetic domains
-5. `^[a-z][0-9][a-z]$` - Letter-number-letter pattern
-6. `.*(com|net|org)$` - Domains with specific suffixes
-7. `^[a-z]{2}\d{2}$` - Two letters followed by two numbers
+The tool includes robust error handling:
+- Automatic retry mechanism for WHOIS queries (3 attempts)
+- Timeout settings for SSL certificate checks
+- Graceful handling of network issues
+- Detailed error reporting
 
 ## Contributing
 
@@ -90,4 +102,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the GNU AFFERO GENERAL PUBLIC License - see the LICENSE file for details. 
+This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details. 
