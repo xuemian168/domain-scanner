@@ -4,7 +4,8 @@
 *.dylib
 *.test
 *.out
-
+available_domains_*
+registered_domains_*
 go.work
 go.work.sum
 

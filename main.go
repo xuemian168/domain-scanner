@@ -77,6 +77,31 @@ func checkDomainSignatures(domain string) ([]string, error) {
 				break
 			}
 		}
+
+		// Check for reserved domain indicators
+		reservedIndicators := []string{
+			"status: reserved",
+			"status: restricted",
+			"status: blocked",
+			"status: prohibited",
+			"status: reserved for registry",
+			"status: reserved for registrar",
+			"status: reserved for registry operator",
+			"status: reserved for future use",
+			"status: not available for registration",
+			"status: not available for general registration",
+			"status: reserved for special purposes",
+			"status: reserved for government use",
+			"status: reserved for educational institutions",
+			"status: reserved for non-profit organizations",
+		}
+
+		for _, indicator := range reservedIndicators {
+			if strings.Contains(result, indicator) {
+				signatures = append(signatures, "RESERVED")
+				break
+			}
+		}
 	}
 
 	// 5. Check SSL certificate with timeout
@@ -102,7 +127,14 @@ func checkDomainAvailability(domain string) (bool, error) {
 		return false, err
 	}
 
-	// If any signature is found, domain is registered
+	// If domain is reserved, it's not available
+	for _, sig := range signatures {
+		if sig == "RESERVED" {
+			return false, nil
+		}
+	}
+
+	// If any other signature is found, domain is registered
 	if len(signatures) > 0 {
 		return false, nil
 	}
