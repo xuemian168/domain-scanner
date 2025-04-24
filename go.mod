@@ -2,8 +2,6 @@ module domain_scanner
 
 go 1.22
 
-toolchain go1.23.3
-
 require github.com/likexian/whois v1.15.6
 
 require (

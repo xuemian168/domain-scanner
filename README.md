@@ -2,9 +2,16 @@ English | [中文](./README.zh.md)
 
 # Domain Scanner
 
+[![Go Version](https://img.shields.io/badge/go-1.22-blue.svg)](https://golang.org)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/xuemian168/domain-scanner.svg?style=social)](https://github.com/xuemian168/domain-scanner/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/xuemian168/domain-scanner.svg?style=social)](https://github.com/xuemian168/domain-scanner/network/members)
+[![GitHub Issues](https://img.shields.io/github/issues/xuemian168/domain-scanner.svg)](https://github.com/xuemian168/domain-scanner/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/xuemian168/domain-scanner.svg)](https://github.com/xuemian168/domain-scanner/pulls)
+
 A powerful domain name availability checker written in Go. This tool helps you find available domain names by checking multiple registration indicators and providing detailed verification results.
 
-![screenshot](./imgs/image.png)
+![Star History Chart](https://api.star-history.com/svg?repos=xuemian168/domain-scanner&type=Date)
 
 ## Features
 
@@ -100,8 +107,12 @@ The tool includes robust error handling:
 
 ## Contributing
 
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
+
+[![AGPL-3.0 License](https://img.shields.io/badge/License-AGPL--3.0-green.svg)](LICENSE)
 
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details. 
