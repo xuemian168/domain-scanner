@@ -7,10 +7,17 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/likexian/whois"
 )
+
+type DomainResult struct {
+	Domain    string
+	Available bool
+	Error     error
+}
 
 func checkDomainAvailability(domain string) (bool, error) {
 	// First check DNS records
@@ -124,6 +131,18 @@ func generateCombinations(domains *[]string, current string, charset string, len
 	}
 }
 
+func worker(id int, jobs <-chan string, results chan<- DomainResult, delay time.Duration) {
+	for domain := range jobs {
+		available, err := checkDomainAvailability(domain)
+		results <- DomainResult{
+			Domain:    domain,
+			Available: available,
+			Error:     err,
+		}
+		time.Sleep(delay) // Add delay to avoid rate limiting
+	}
+}
+
 func printHelp() {
 	fmt.Println("Domain Scanner - A tool to check domain availability")
 	fmt.Println("\nUsage:")
@@ -137,24 +156,13 @@ func printHelp() {
 	fmt.Println("              a: Alphanumeric (e.g., a1b.li)")
 	fmt.Println("  -r string   Regex filter for domain names")
 	fmt.Println("  -delay int  Delay between queries in milliseconds (default: 1000)")
+	fmt.Println("  -workers int Number of concurrent workers (default: 10)")
+	fmt.Println("  -h          Show help information")
 	fmt.Println("\nExamples:")
-	fmt.Println("  1. Check 3-letter .li domains:")
-	fmt.Println("     go run main.go -l 3 -s .li -p D")
-	fmt.Println("\n  2. Check 3-digit .li domains:")
-	fmt.Println("     go run main.go -l 3 -s .li -p d")
-	fmt.Println("\n  3. Check 3-character alphanumeric .li domains:")
-	fmt.Println("     go run main.go -l 3 -s .li -p a")
-	fmt.Println("\n  4. Check domains containing 'abc':")
-	fmt.Println("     go run main.go -l 5 -s .li -p D -r '.*abc.*'")
-	fmt.Println("\n  5. Check domains starting with 'a' and ending with 'z':")
-	fmt.Println("     go run main.go -l 4 -s .li -p D -r '^a.*z$'")
-	fmt.Println("\n  6. Check domains containing only vowels:")
-	fmt.Println("     go run main.go -l 3 -s .li -p D -r '^[aeiou]+$'")
-	fmt.Println("\n  7. Check domains with alternating letters and numbers:")
-	fmt.Println("     go run main.go -l 4 -s .li -p a -r '^([a-z][0-9]){2}$'")
-	fmt.Println("\nOutput files:")
-	fmt.Println("  - available_domains_[pattern]_[length]_[suffix].txt")
-	fmt.Println("  - registered_domains_[pattern]_[length]_[suffix].txt")
+	fmt.Println("  1. Check 3-letter .li domains with 20 workers:")
+	fmt.Println("     go run main.go -l 3 -s .li -p D -workers 20")
+	fmt.Println("\n  2. Check domains with custom delay and workers:")
+	fmt.Println("     go run main.go -l 3 -s .li -p D -delay 500 -workers 15")
 }
 
 func main() {
@@ -164,6 +172,7 @@ func main() {
 	pattern := flag.String("p", "D", "Domain pattern (d: numbers, D: letters, a: alphanumeric)")
 	regexFilter := flag.String("r", "", "Regex filter for domain names")
 	delay := flag.Int("delay", 1000, "Delay between queries in milliseconds")
+	workers := flag.Int("workers", 10, "Number of concurrent workers")
 	help := flag.Bool("h", false, "Show help information")
 	flag.Parse()
 
@@ -181,29 +190,49 @@ func main() {
 	availableDomains := []string{}
 	registeredDomains := []string{}
 
-	fmt.Printf("Checking %d domains with pattern %s and length %d...\n", len(domains), *pattern, *length)
+	fmt.Printf("Checking %d domains with pattern %s and length %d using %d workers...\n",
+		len(domains), *pattern, *length, *workers)
 	if *regexFilter != "" {
 		fmt.Printf("Using regex filter: %s\n", *regexFilter)
 	}
 
-	for i, domain := range domains {
-		available, err := checkDomainAvailability(domain)
-		if err != nil {
-			fmt.Printf("[%d/%d] Error checking domain %s: %v\n", i+1, len(domains), domain, err)
-			continue
-		}
+	// Create channels for jobs and results
+	jobs := make(chan string, len(domains))
+	results := make(chan DomainResult, len(domains))
 
-		if available {
-			fmt.Printf("[%d/%d] Domain %s is AVAILABLE!\n", i+1, len(domains), domain)
-			availableDomains = append(availableDomains, domain)
-		} else {
-			fmt.Printf("[%d/%d] Domain %s is REGISTERED\n", i+1, len(domains), domain)
-			registeredDomains = append(registeredDomains, domain)
-		}
-
-		// Add delay to avoid rate limiting
-		time.Sleep(time.Duration(*delay) * time.Millisecond)
+	// Start workers
+	for w := 1; w <= *workers; w++ {
+		go worker(w, jobs, results, time.Duration(*delay)*time.Millisecond)
 	}
+
+	// Send jobs
+	for _, domain := range domains {
+		jobs <- domain
+	}
+	close(jobs)
+
+	// Collect results
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < len(domains); i++ {
+			result := <-results
+			if result.Error != nil {
+				fmt.Printf("Error checking domain %s: %v\n", result.Domain, result.Error)
+				continue
+			}
+
+			if result.Available {
+				fmt.Printf("Domain %s is AVAILABLE!\n", result.Domain)
+				availableDomains = append(availableDomains, result.Domain)
+			} else {
+				fmt.Printf("Domain %s is REGISTERED\n", result.Domain)
+				registeredDomains = append(registeredDomains, result.Domain)
+			}
+		}
+	}()
+	wg.Wait()
 
 	// Save available domains to file
 	availableFile := fmt.Sprintf("available_domains_%s_%d_%s.txt", *pattern, *length, strings.TrimPrefix(*suffix, "."))
