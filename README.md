@@ -4,6 +4,8 @@ English | [中文](./README.zh.md)
 
 A powerful domain name availability checker written in Go. This tool helps you find available domain names by checking multiple registration indicators and providing detailed verification results.
 
+![screenshot](./imgs/image.png)
+
 ## Features
 
 - **Multi-method Verification**: Checks domain availability using multiple methods:
