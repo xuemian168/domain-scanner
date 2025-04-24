@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net"
@@ -11,78 +12,135 @@ import (
 	"time"
 
 	"github.com/likexian/whois"
-	"github.com/schollz/progressbar/v3"
 )
 
 type DomainResult struct {
-	Domain    string
-	Available bool
-	Error     error
+	Domain     string
+	Available  bool
+	Error      error
+	Signatures []string
+}
+
+func checkDomainSignatures(domain string) ([]string, error) {
+	var signatures []string
+
+	// 1. Check DNS NS records
+	nsRecords, err := net.LookupNS(domain)
+	if err == nil && len(nsRecords) > 0 {
+		signatures = append(signatures, "DNS_NS")
+	}
+
+	// 2. Check DNS A records
+	ipRecords, err := net.LookupIP(domain)
+	if err == nil && len(ipRecords) > 0 {
+		signatures = append(signatures, "DNS_A")
+	}
+
+	// 3. Check DNS MX records
+	mxRecords, err := net.LookupMX(domain)
+	if err == nil && len(mxRecords) > 0 {
+		signatures = append(signatures, "DNS_MX")
+	}
+
+	// 4. Check WHOIS information with retry
+	var whoisResult string
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		result, err := whois.Whois(domain)
+		if err == nil {
+			whoisResult = result
+			break
+		}
+		if i < maxRetries-1 {
+			time.Sleep(time.Second * 2) // Wait 2 seconds before retry
+		}
+	}
+
+	if whoisResult != "" {
+		// Convert WHOIS response to lowercase for case-insensitive matching
+		result := strings.ToLower(whoisResult)
+
+		// Check for registration indicators
+		registeredIndicators := []string{
+			"registrar:",
+			"registrant:",
+			"creation date:",
+			"updated date:",
+			"expiration date:",
+			"name server:",
+			"nserver:",
+		}
+
+		for _, indicator := range registeredIndicators {
+			if strings.Contains(result, indicator) {
+				signatures = append(signatures, "WHOIS")
+				break
+			}
+		}
+	}
+
+	// 5. Check SSL certificate with timeout
+	conn, err := tls.DialWithDialer(&net.Dialer{
+		Timeout: 5 * time.Second,
+	}, "tcp", domain+":443", &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if err == nil {
+		defer conn.Close()
+		state := conn.ConnectionState()
+		if len(state.PeerCertificates) > 0 {
+			signatures = append(signatures, "SSL")
+		}
+	}
+
+	return signatures, nil
 }
 
 func checkDomainAvailability(domain string) (bool, error) {
-	// First check DNS records
-	// Try to resolve NS records
-	nsRecords, err := net.LookupNS(domain)
-	if err == nil && len(nsRecords) > 0 {
-		return false, nil
-	}
-
-	// Try to resolve A records
-	ipRecords, err := net.LookupIP(domain)
-	if err == nil && len(ipRecords) > 0 {
-		return false, nil
-	}
-
-	// If no DNS records found, check WHOIS as a secondary check
-	result, err := whois.Whois(domain)
+	signatures, err := checkDomainSignatures(domain)
 	if err != nil {
 		return false, err
 	}
 
-	// Convert WHOIS response to lowercase for case-insensitive matching
-	result = strings.ToLower(result)
-
-	// Check for indicators that domain is definitely registered
-	registeredIndicators := []string{
-		"registrar:",
-		"registrant:",
-		"creation date:",
-		"updated date:",
-		"expiration date:",
-		"name server:",
-		"nserver:",
+	// If any signature is found, domain is registered
+	if len(signatures) > 0 {
+		return false, nil
 	}
 
-	// Check for indicators that domain is definitely available
-	availableIndicators := []string{
-		"no match for",
-		"not found",
-		"no data found",
-		"no entries found",
-		"domain not found",
-		"no object found",
-		"no matching record",
-		"status: free",
-		"status: available",
-	}
+	// If no signatures found, check WHOIS as final verification with retry
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		result, err := whois.Whois(domain)
+		if err == nil {
+			// Convert WHOIS response to lowercase for case-insensitive matching
+			result = strings.ToLower(result)
 
-	// First check if domain is definitely available
-	for _, indicator := range availableIndicators {
-		if strings.Contains(result, indicator) {
-			return true, nil
+			// Check for indicators that domain is definitely available
+			availableIndicators := []string{
+				"no match for",
+				"not found",
+				"no data found",
+				"no entries found",
+				"domain not found",
+				"no object found",
+				"no matching record",
+				"status: free",
+				"status: available",
+			}
+
+			for _, indicator := range availableIndicators {
+				if strings.Contains(result, indicator) {
+					return true, nil
+				}
+			}
+			break
+		}
+		if i < maxRetries-1 {
+			time.Sleep(time.Second * 2) // Wait 2 seconds before retry
 		}
 	}
 
-	// Then check if domain is definitely registered
-	for _, indicator := range registeredIndicators {
-		if strings.Contains(result, indicator) {
-			return false, nil
-		}
-	}
-
-	// If we can't determine the status from WHOIS and no DNS records exist,
-	// assume the domain is available
+	// If we can't determine the status, assume the domain is available
 	return true, nil
 }
 
@@ -135,12 +193,14 @@ func generateCombinations(domains *[]string, current string, charset string, len
 func worker(id int, jobs <-chan string, results chan<- DomainResult, delay time.Duration) {
 	for domain := range jobs {
 		available, err := checkDomainAvailability(domain)
+		signatures, _ := checkDomainSignatures(domain)
 		results <- DomainResult{
-			Domain:    domain,
-			Available: available,
-			Error:     err,
+			Domain:     domain,
+			Available:  available,
+			Error:      err,
+			Signatures: signatures,
 		}
-		time.Sleep(delay) // Add delay to avoid rate limiting
+		time.Sleep(delay)
 	}
 }
 
@@ -221,18 +281,6 @@ func main() {
 		fmt.Printf("Using regex filter: %s\n", *regexFilter)
 	}
 
-	// Create progress bar
-	bar := progressbar.NewOptions(len(domains),
-		progressbar.OptionSetDescription("Scanning domains"),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "=",
-			SaucerHead:    ">",
-			SaucerPadding: " ",
-			BarStart:      "[",
-			BarEnd:        "]",
-		}),
-		progressbar.OptionClearOnFinish())
-
 	// Create channels for jobs and results
 	jobs := make(chan string, len(domains))
 	results := make(chan DomainResult, len(domains))
@@ -265,20 +313,20 @@ func main() {
 		defer wg.Done()
 		for i := 0; i < len(domains); i++ {
 			result := <-results
+			progress := fmt.Sprintf("[%d/%d]", i+1, len(domains))
 			if result.Error != nil {
-				statusChan <- fmt.Sprintf("Error checking domain %s: %v", result.Domain, result.Error)
-				bar.Add(1)
+				statusChan <- fmt.Sprintf("%s Error checking domain %s: %v", progress, result.Domain, result.Error)
 				continue
 			}
 
 			if result.Available {
-				statusChan <- fmt.Sprintf("Domain %s is AVAILABLE!", result.Domain)
+				statusChan <- fmt.Sprintf("%s Domain %s is AVAILABLE!", progress, result.Domain)
 				availableDomains = append(availableDomains, result.Domain)
 			} else if *showRegistered {
-				statusChan <- fmt.Sprintf("Domain %s is REGISTERED", result.Domain)
+				sigStr := strings.Join(result.Signatures, ", ")
+				statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s]", progress, result.Domain, sigStr)
 				registeredDomains = append(registeredDomains, result.Domain)
 			}
-			bar.Add(1)
 		}
 		close(statusChan)
 	}()
