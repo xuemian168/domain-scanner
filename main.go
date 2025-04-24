@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/likexian/whois"
+	"github.com/schollz/progressbar/v3"
 )
 
 type DomainResult struct {
@@ -157,12 +158,15 @@ func printHelp() {
 	fmt.Println("  -r string   Regex filter for domain names")
 	fmt.Println("  -delay int  Delay between queries in milliseconds (default: 1000)")
 	fmt.Println("  -workers int Number of concurrent workers (default: 10)")
+	fmt.Println("  -show-registered Show registered domains in output (default: false)")
 	fmt.Println("  -h          Show help information")
 	fmt.Println("\nExamples:")
 	fmt.Println("  1. Check 3-letter .li domains with 20 workers:")
 	fmt.Println("     go run main.go -l 3 -s .li -p D -workers 20")
 	fmt.Println("\n  2. Check domains with custom delay and workers:")
 	fmt.Println("     go run main.go -l 3 -s .li -p D -delay 500 -workers 15")
+	fmt.Println("\n  3. Show both available and registered domains:")
+	fmt.Println("     go run main.go -l 3 -s .li -p D -show-registered")
 }
 
 func main() {
@@ -173,6 +177,7 @@ func main() {
 	regexFilter := flag.String("r", "", "Regex filter for domain names")
 	delay := flag.Int("delay", 1000, "Delay between queries in milliseconds")
 	workers := flag.Int("workers", 10, "Number of concurrent workers")
+	showRegistered := flag.Bool("show-registered", false, "Show registered domains in output")
 	help := flag.Bool("h", false, "Show help information")
 	flag.Parse()
 
@@ -195,6 +200,17 @@ func main() {
 	if *regexFilter != "" {
 		fmt.Printf("Using regex filter: %s\n", *regexFilter)
 	}
+
+	// Create progress bar
+	bar := progressbar.NewOptions(len(domains),
+		progressbar.OptionSetDescription("Scanning domains"),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "=",
+			SaucerHead:    ">",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}))
 
 	// Create channels for jobs and results
 	jobs := make(chan string, len(domains))
@@ -219,17 +235,19 @@ func main() {
 		for i := 0; i < len(domains); i++ {
 			result := <-results
 			if result.Error != nil {
-				fmt.Printf("Error checking domain %s: %v\n", result.Domain, result.Error)
+				fmt.Printf("\nError checking domain %s: %v\n", result.Domain, result.Error)
+				bar.Add(1)
 				continue
 			}
 
 			if result.Available {
-				fmt.Printf("Domain %s is AVAILABLE!\n", result.Domain)
+				fmt.Printf("\nDomain %s is AVAILABLE!\n", result.Domain)
 				availableDomains = append(availableDomains, result.Domain)
-			} else {
-				fmt.Printf("Domain %s is REGISTERED\n", result.Domain)
+			} else if *showRegistered {
+				fmt.Printf("\nDomain %s is REGISTERED\n", result.Domain)
 				registeredDomains = append(registeredDomains, result.Domain)
 			}
+			bar.Add(1)
 		}
 	}()
 	wg.Wait()
@@ -251,28 +269,34 @@ func main() {
 		}
 	}
 
-	// Save registered domains to file
+	// Save registered domains to file only if show-registered is true
 	registeredFile := fmt.Sprintf("registered_domains_%s_%d_%s.txt", *pattern, *length, strings.TrimPrefix(*suffix, "."))
-	regFile, err := os.Create(registeredFile)
-	if err != nil {
-		fmt.Printf("Error creating registered domains file: %v\n", err)
-		os.Exit(1)
-	}
-	defer regFile.Close()
-
-	for _, domain := range registeredDomains {
-		_, err := regFile.WriteString(domain + "\n")
+	if *showRegistered {
+		regFile, err := os.Create(registeredFile)
 		if err != nil {
-			fmt.Printf("Error writing to registered domains file: %v\n", err)
+			fmt.Printf("Error creating registered domains file: %v\n", err)
 			os.Exit(1)
+		}
+		defer regFile.Close()
+
+		for _, domain := range registeredDomains {
+			_, err := regFile.WriteString(domain + "\n")
+			if err != nil {
+				fmt.Printf("Error writing to registered domains file: %v\n", err)
+				os.Exit(1)
+			}
 		}
 	}
 
-	fmt.Printf("\nResults saved to:\n")
+	fmt.Printf("\n\nResults saved to:\n")
 	fmt.Printf("- Available domains: %s\n", availableFile)
-	fmt.Printf("- Registered domains: %s\n", registeredFile)
+	if *showRegistered {
+		fmt.Printf("- Registered domains: %s\n", registeredFile)
+	}
 	fmt.Printf("\nSummary:\n")
 	fmt.Printf("- Total domains checked: %d\n", len(domains))
 	fmt.Printf("- Available domains: %d\n", len(availableDomains))
-	fmt.Printf("- Registered domains: %d\n", len(registeredDomains))
+	if *showRegistered {
+		fmt.Printf("- Registered domains: %d\n", len(registeredDomains))
+	}
 }
