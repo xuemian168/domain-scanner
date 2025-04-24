@@ -169,7 +169,27 @@ func printHelp() {
 	fmt.Println("     go run main.go -l 3 -s .li -p D -show-registered")
 }
 
+func showMOTD() {
+	fmt.Println("\033[1;36m") // Cyan color
+	fmt.Println("╔════════════════════════════════════════════════════════════╗")
+	fmt.Println("║                    Domain Scanner v1.0                     ║")
+	fmt.Println("║                                                            ║")
+	fmt.Println("║  A powerful tool for checking domain name availability     ║")
+	fmt.Println("║                                                            ║")
+	fmt.Println("║  Developer: www.ict.run                                    ║")
+	fmt.Println("║  GitHub:    https://github.com/xuemian168/domain-scanner   ║")
+	fmt.Println("║                                                            ║")
+	fmt.Println("║  License:   AGPL-3.0                                       ║")
+	fmt.Println("║  Copyright © 2025                                          ║")
+	fmt.Println("╚════════════════════════════════════════════════════════════╝")
+	fmt.Println("\033[0m") // Reset color
+	fmt.Println()
+}
+
 func main() {
+	// Show MOTD
+	showMOTD()
+
 	// Define command line flags
 	length := flag.Int("l", 3, "Domain length")
 	suffix := flag.String("s", ".li", "Domain suffix")
@@ -210,7 +230,8 @@ func main() {
 			SaucerPadding: " ",
 			BarStart:      "[",
 			BarEnd:        "]",
-		}))
+		}),
+		progressbar.OptionClearOnFinish())
 
 	// Create channels for jobs and results
 	jobs := make(chan string, len(domains))
@@ -227,6 +248,16 @@ func main() {
 	}
 	close(jobs)
 
+	// Create a channel for domain status messages
+	statusChan := make(chan string, len(domains))
+
+	// Start a goroutine to print status messages
+	go func() {
+		for msg := range statusChan {
+			fmt.Println(msg)
+		}
+	}()
+
 	// Collect results
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -235,20 +266,21 @@ func main() {
 		for i := 0; i < len(domains); i++ {
 			result := <-results
 			if result.Error != nil {
-				fmt.Printf("\nError checking domain %s: %v\n", result.Domain, result.Error)
+				statusChan <- fmt.Sprintf("Error checking domain %s: %v", result.Domain, result.Error)
 				bar.Add(1)
 				continue
 			}
 
 			if result.Available {
-				fmt.Printf("\nDomain %s is AVAILABLE!\n", result.Domain)
+				statusChan <- fmt.Sprintf("Domain %s is AVAILABLE!", result.Domain)
 				availableDomains = append(availableDomains, result.Domain)
 			} else if *showRegistered {
-				fmt.Printf("\nDomain %s is REGISTERED\n", result.Domain)
+				statusChan <- fmt.Sprintf("Domain %s is REGISTERED", result.Domain)
 				registeredDomains = append(registeredDomains, result.Domain)
 			}
 			bar.Add(1)
 		}
+		close(statusChan)
 	}()
 	wg.Wait()
 
