@@ -1,8 +1,19 @@
 English | [中文](./README.zh.md)
 
+[![Go Version](https://img.shields.io/badge/go-1.22-blue.svg)](https://golang.org)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/xuemian168/domain-scanner.svg?style=social)](https://github.com/xuemian168/domain-scanner/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/xuemian168/domain-scanner.svg?style=social)](https://github.com/xuemian168/domain-scanner/network/members)
+[![GitHub Issues](https://img.shields.io/github/issues/xuemian168/domain-scanner.svg)](https://github.com/xuemian168/domain-scanner/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/xuemian168/domain-scanner.svg)](https://github.com/xuemian168/domain-scanner/pulls)
+
 # 域名扫描器
 
 一个强大的域名可用性检查工具，使用 Go 语言编写。该工具通过多种注册指标检查来帮助您找到可用的域名，并提供详细的验证结果。
+
+### 网页版: [zli.li](https://zli.li)
+
+![Star History Chart](https://api.star-history.com/svg?repos=xuemian168/domain-scanner&type=Date)
 
 ![screenshot](./imgs/image.png)
 
