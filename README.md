@@ -52,6 +52,9 @@ go run main.go [options]
   - `D`: Pure letters (e.g., abc.li)
   - `a`: Alphanumeric (e.g., a1b.li)
 - `-r string`: Regex filter for domain names
+- `-regex-mode string`: Regex matching mode (default: full)
+  - `full`: Match entire domain name
+  - `prefix`: Match only domain name prefix
 - `-delay int`: Delay between queries in milliseconds (default: 1000)
 - `-workers int`: Number of concurrent workers (default: 10)
 - `-show-registered`: Show registered domains in output (default: false)
@@ -74,9 +77,14 @@ go run main.go -l 3 -s .li -p D -delay 500 -workers 15
 go run main.go -l 3 -s .li -p D -show-registered
 ```
 
-4. Use regex filter for specific patterns:
+4. Use regex filter with full domain matching:
 ```bash
-go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$"
+go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$" -regex-mode full
+```
+
+5. Use regex filter with prefix matching:
+```bash
+go run main.go -l 3 -s .li -p D -r "^[a-z]{2}" -regex-mode prefix
 ```
 
 ## Output Format
@@ -118,3 +126,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 [![AGPL-3.0 License](https://img.shields.io/badge/License-AGPL--3.0-green.svg)](LICENSE)
 
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details. 
+
+## Version History
+
+### v1.2.2
+- Added flexible regex matching mode with `-regex-mode` option
+- Improved domain filtering capabilities
+- Enhanced error handling for regex patterns

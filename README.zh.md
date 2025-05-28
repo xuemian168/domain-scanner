@@ -53,11 +53,14 @@ go run main.go [选项]
   - `d`: 纯数字（例如：123.li）
   - `D`: 纯字母（例如：abc.li）
   - `a`: 字母数字组合（例如：a1b.li）
-- `-r string`: 域名正则表达式过滤器
 - `-delay int`: 查询间隔（毫秒）（默认：1000）
 - `-workers int`: 并发工作线程数（默认：10）
 - `-show-registered`: 在输出中显示已注册的域名（默认：false）
 - `-h`: 显示帮助信息
+- `-r string`: 域名正则表达式过滤器
+- `-regex-mode string`: 正则表达式匹配模式（默认：full）
+  - `full`：匹配完整域名
+  - `prefix`：仅匹配域名前缀
 
 ### 示例
 
@@ -76,9 +79,14 @@ go run main.go -l 3 -s .li -p D -delay 500 -workers 15
 go run main.go -l 3 -s .li -p D -show-registered
 ```
 
-4. 使用正则表达式过滤特定模式：
+4. 使用完整域名正则表达式过滤：
 ```bash
-go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$"
+go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$" -regex-mode full
+```
+
+5. 使用域名前缀正则表达式过滤：
+```bash
+go run main.go -l 3 -s .li -p D -r "^[a-z]{2}" -regex-mode prefix
 ```
 
 ## 输出格式
@@ -114,4 +122,11 @@ go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$"
 
 ## 许可证
 
-本项目采用 AGPL-3.0 许可证 - 详情请参阅 [LICENSE](LICENSE) 文件。 
+本项目采用 AGPL-3.0 许可证 - 详情请参阅 [LICENSE](LICENSE) 文件。
+
+## 版本历史
+
+### v1.2.2
+- 新增 `-regex-mode` 选项，提供灵活的正则表达式匹配模式
+- 改进域名过滤功能
+- 增强正则表达式模式的错误处理

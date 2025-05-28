@@ -21,6 +21,14 @@ type DomainResult struct {
 	Signatures []string
 }
 
+// Add RegexMode type
+type RegexMode int
+
+const (
+	RegexModeFull   RegexMode = iota // Match full domain
+	RegexModePrefix                  // Match only domain prefix
+)
+
 func checkDomainSignatures(domain string) ([]string, error) {
 	var signatures []string
 
@@ -176,7 +184,8 @@ func checkDomainAvailability(domain string) (bool, error) {
 	return true, nil
 }
 
-func generateDomains(length int, suffix string, pattern string, regexFilter string) []string {
+// Modify generateDomains function signature
+func generateDomains(length int, suffix string, pattern string, regexFilter string, regexMode RegexMode) []string {
 	var domains []string
 	letters := "abcdefghijklmnopqrstuvwxyz"
 	numbers := "0123456789"
@@ -194,11 +203,11 @@ func generateDomains(length int, suffix string, pattern string, regexFilter stri
 
 	switch pattern {
 	case "d": // Pure numbers
-		generateCombinations(&domains, "", numbers, length, suffix, regex)
+		generateCombinations(&domains, "", numbers, length, suffix, regex, regexMode)
 	case "D": // Pure letters
-		generateCombinations(&domains, "", letters, length, suffix, regex)
+		generateCombinations(&domains, "", letters, length, suffix, regex, regexMode)
 	case "a": // Alphanumeric
-		generateCombinations(&domains, "", letters+numbers, length, suffix, regex)
+		generateCombinations(&domains, "", letters+numbers, length, suffix, regex, regexMode)
 	default:
 		fmt.Println("Invalid pattern. Use -d for numbers, -D for letters, -a for alphanumeric")
 		os.Exit(1)
@@ -207,18 +216,26 @@ func generateDomains(length int, suffix string, pattern string, regexFilter stri
 	return domains
 }
 
-func generateCombinations(domains *[]string, current string, charset string, length int, suffix string, regex *regexp.Regexp) {
+// Modify generateCombinations function
+func generateCombinations(domains *[]string, current string, charset string, length int, suffix string, regex *regexp.Regexp, regexMode RegexMode) {
 	if len(current) == length {
 		domain := current + suffix
-		// Apply regex filter if provided
-		if regex == nil || regex.MatchString(domain) {
+		var match bool
+		switch regexMode {
+		case RegexModeFull:
+			match = regex == nil || regex.MatchString(domain)
+		case RegexModePrefix:
+			match = regex == nil || regex.MatchString(current)
+		}
+
+		if match {
 			*domains = append(*domains, domain)
 		}
 		return
 	}
 
 	for _, c := range charset {
-		generateCombinations(domains, current+string(c), charset, length, suffix, regex)
+		generateCombinations(domains, current+string(c), charset, length, suffix, regex, regexMode)
 	}
 }
 
@@ -248,6 +265,9 @@ func printHelp() {
 	fmt.Println("              D: Pure letters (e.g., abc.li)")
 	fmt.Println("              a: Alphanumeric (e.g., a1b.li)")
 	fmt.Println("  -r string   Regex filter for domain names")
+	fmt.Println("  -regex-mode string Regex matching mode (default: full)")
+	fmt.Println("    full: Match entire domain name")
+	fmt.Println("    prefix: Match only domain name prefix")
 	fmt.Println("  -delay int  Delay between queries in milliseconds (default: 1000)")
 	fmt.Println("  -workers int Number of concurrent workers (default: 10)")
 	fmt.Println("  -show-registered Show registered domains in output (default: false)")
@@ -259,12 +279,16 @@ func printHelp() {
 	fmt.Println("     go run main.go -l 3 -s .li -p D -delay 500 -workers 15")
 	fmt.Println("\n  3. Show both available and registered domains:")
 	fmt.Println("     go run main.go -l 3 -s .li -p D -show-registered")
+	fmt.Println("\n  4. Use regex filter with full domain matching:")
+	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}[0-9]$\" -regex-mode full")
+	fmt.Println("\n  5. Use regex filter with prefix matching:")
+	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}\" -regex-mode prefix")
 }
 
 func showMOTD() {
 	fmt.Println("\033[1;36m") // Cyan color
 	fmt.Println("╔════════════════════════════════════════════════════════════╗")
-	fmt.Println("║                    Domain Scanner v1.0                     ║")
+	fmt.Println("║                    Domain Scanner v1.2.2                   ║")
 	fmt.Println("║                                                            ║")
 	fmt.Println("║  A powerful tool for checking domain name availability     ║")
 	fmt.Println("║                                                            ║")
@@ -291,6 +315,7 @@ func main() {
 	workers := flag.Int("workers", 10, "Number of concurrent workers")
 	showRegistered := flag.Bool("show-registered", false, "Show registered domains in output")
 	help := flag.Bool("h", false, "Show help information")
+	regexMode := flag.String("regex-mode", "full", "Regex match mode: 'full' or 'prefix'")
 	flag.Parse()
 
 	if *help {
@@ -303,7 +328,18 @@ func main() {
 		*suffix = "." + *suffix
 	}
 
-	domains := generateDomains(*length, *suffix, *pattern, *regexFilter)
+	// Determine regex mode
+	var regexModeEnum RegexMode
+	if *regexMode == "full" {
+		regexModeEnum = RegexModeFull
+	} else if *regexMode == "prefix" {
+		regexModeEnum = RegexModePrefix
+	} else {
+		fmt.Println("Invalid regex-mode. Use 'full' or 'prefix'")
+		os.Exit(1)
+	}
+
+	domains := generateDomains(*length, *suffix, *pattern, *regexFilter, regexModeEnum)
 	availableDomains := []string{}
 	registeredDomains := []string{}
 
