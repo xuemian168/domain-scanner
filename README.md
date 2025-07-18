@@ -129,6 +129,14 @@ This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE)
 
 ## Version History
 
+### v1.3.0
+- **Performance Optimizations**: Significantly improved domain checking speed
+  - Optimized reserved domain detection with O(1) map lookups
+  - Pre-compiled regex patterns for better performance
+  - Enhanced WHOIS response parsing efficiency
+- **Bug Fixes**: Fixed WHOIS parsing for .de domains and other TLDs
+- **Code Quality**: Refactored internal architecture for better maintainability
+
 ### v1.2.2
 - Added flexible regex matching mode with `-regex-mode` option
 - Improved domain filtering capabilities

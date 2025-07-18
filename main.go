@@ -13,7 +13,6 @@ import (
 	"domain_scanner/internal/worker"
 )
 
-
 func printHelp() {
 	fmt.Println("Domain Scanner - A tool to check domain availability")
 	fmt.Println("\nUsage:")
@@ -49,7 +48,7 @@ func printHelp() {
 func showMOTD() {
 	fmt.Println("\033[1;36m") // Cyan color
 	fmt.Println("╔════════════════════════════════════════════════════════════╗")
-	fmt.Println("║                    Domain Scanner v1.2.2                   ║")
+	fmt.Println("║                    Domain Scanner v1.3.0                   ║")
 	fmt.Println("║                                                            ║")
 	fmt.Println("║  A powerful tool for checking domain name availability     ║")
 	fmt.Println("║                                                            ║")
