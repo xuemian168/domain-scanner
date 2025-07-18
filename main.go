@@ -1,257 +1,18 @@
 package main
 
 import (
-	"crypto/tls"
 	"flag"
 	"fmt"
-	"net"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/likexian/whois"
+	"domain_scanner/internal/generator"
+	"domain_scanner/internal/types"
+	"domain_scanner/internal/worker"
 )
 
-type DomainResult struct {
-	Domain     string
-	Available  bool
-	Error      error
-	Signatures []string
-}
-
-// Add RegexMode type
-type RegexMode int
-
-const (
-	RegexModeFull   RegexMode = iota // Match full domain
-	RegexModePrefix                  // Match only domain prefix
-)
-
-func checkDomainSignatures(domain string) ([]string, error) {
-	var signatures []string
-
-	// 1. Check DNS NS records
-	nsRecords, err := net.LookupNS(domain)
-	if err == nil && len(nsRecords) > 0 {
-		signatures = append(signatures, "DNS_NS")
-	}
-
-	// 2. Check DNS A records
-	ipRecords, err := net.LookupIP(domain)
-	if err == nil && len(ipRecords) > 0 {
-		signatures = append(signatures, "DNS_A")
-	}
-
-	// 3. Check DNS MX records
-	mxRecords, err := net.LookupMX(domain)
-	if err == nil && len(mxRecords) > 0 {
-		signatures = append(signatures, "DNS_MX")
-	}
-
-	// 4. Check WHOIS information with retry
-	var whoisResult string
-	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		result, err := whois.Whois(domain)
-		if err == nil {
-			whoisResult = result
-			break
-		}
-		if i < maxRetries-1 {
-			time.Sleep(time.Second * 2) // Wait 2 seconds before retry
-		}
-	}
-
-	if whoisResult != "" {
-		// Convert WHOIS response to lowercase for case-insensitive matching
-		result := strings.ToLower(whoisResult)
-
-		// Check for registration indicators
-		registeredIndicators := []string{
-			"registrar:",
-			"registrant:",
-			"creation date:",
-			"updated date:",
-			"expiration date:",
-			"name server:",
-			"nserver:",
-		}
-
-		for _, indicator := range registeredIndicators {
-			if strings.Contains(result, indicator) {
-				signatures = append(signatures, "WHOIS")
-				break
-			}
-		}
-
-		// Check for reserved domain indicators
-		reservedIndicators := []string{
-			"status: reserved",
-			"status: restricted",
-			"status: blocked",
-			"status: prohibited",
-			"status: reserved for registry",
-			"status: reserved for registrar",
-			"status: reserved for registry operator",
-			"status: reserved for future use",
-			"status: not available for registration",
-			"status: not available for general registration",
-			"status: reserved for special purposes",
-			"status: reserved for government use",
-			"status: reserved for educational institutions",
-			"status: reserved for non-profit organizations",
-		}
-
-		for _, indicator := range reservedIndicators {
-			if strings.Contains(result, indicator) {
-				signatures = append(signatures, "RESERVED")
-				break
-			}
-		}
-	}
-
-	// 5. Check SSL certificate with timeout
-	conn, err := tls.DialWithDialer(&net.Dialer{
-		Timeout: 5 * time.Second,
-	}, "tcp", domain+":443", &tls.Config{
-		InsecureSkipVerify: true,
-	})
-	if err == nil {
-		defer conn.Close()
-		state := conn.ConnectionState()
-		if len(state.PeerCertificates) > 0 {
-			signatures = append(signatures, "SSL")
-		}
-	}
-
-	return signatures, nil
-}
-
-func checkDomainAvailability(domain string) (bool, error) {
-	signatures, err := checkDomainSignatures(domain)
-	if err != nil {
-		return false, err
-	}
-
-	// If domain is reserved, it's not available
-	for _, sig := range signatures {
-		if sig == "RESERVED" {
-			return false, nil
-		}
-	}
-
-	// If any other signature is found, domain is registered
-	if len(signatures) > 0 {
-		return false, nil
-	}
-
-	// If no signatures found, check WHOIS as final verification with retry
-	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		result, err := whois.Whois(domain)
-		if err == nil {
-			// Convert WHOIS response to lowercase for case-insensitive matching
-			result = strings.ToLower(result)
-
-			// Check for indicators that domain is definitely available
-			availableIndicators := []string{
-				"no match for",
-				"not found",
-				"no data found",
-				"no entries found",
-				"domain not found",
-				"no object found",
-				"no matching record",
-				"status: free",
-				"status: available",
-			}
-
-			for _, indicator := range availableIndicators {
-				if strings.Contains(result, indicator) {
-					return true, nil
-				}
-			}
-			break
-		}
-		if i < maxRetries-1 {
-			time.Sleep(time.Second * 2) // Wait 2 seconds before retry
-		}
-	}
-
-	// If we can't determine the status, assume the domain is available
-	return true, nil
-}
-
-// Modify generateDomains function signature
-func generateDomains(length int, suffix string, pattern string, regexFilter string, regexMode RegexMode) []string {
-	var domains []string
-	letters := "abcdefghijklmnopqrstuvwxyz"
-	numbers := "0123456789"
-
-	// Compile regex if provided
-	var regex *regexp.Regexp
-	var err error
-	if regexFilter != "" {
-		regex, err = regexp.Compile(regexFilter)
-		if err != nil {
-			fmt.Printf("Invalid regex pattern: %v\n", err)
-			os.Exit(1)
-		}
-	}
-
-	switch pattern {
-	case "d": // Pure numbers
-		generateCombinations(&domains, "", numbers, length, suffix, regex, regexMode)
-	case "D": // Pure letters
-		generateCombinations(&domains, "", letters, length, suffix, regex, regexMode)
-	case "a": // Alphanumeric
-		generateCombinations(&domains, "", letters+numbers, length, suffix, regex, regexMode)
-	default:
-		fmt.Println("Invalid pattern. Use -d for numbers, -D for letters, -a for alphanumeric")
-		os.Exit(1)
-	}
-
-	return domains
-}
-
-// Modify generateCombinations function
-func generateCombinations(domains *[]string, current string, charset string, length int, suffix string, regex *regexp.Regexp, regexMode RegexMode) {
-	if len(current) == length {
-		domain := current + suffix
-		var match bool
-		switch regexMode {
-		case RegexModeFull:
-			match = regex == nil || regex.MatchString(domain)
-		case RegexModePrefix:
-			match = regex == nil || regex.MatchString(current)
-		}
-
-		if match {
-			*domains = append(*domains, domain)
-		}
-		return
-	}
-
-	for _, c := range charset {
-		generateCombinations(domains, current+string(c), charset, length, suffix, regex, regexMode)
-	}
-}
-
-func worker(id int, jobs <-chan string, results chan<- DomainResult, delay time.Duration) {
-	for domain := range jobs {
-		available, err := checkDomainAvailability(domain)
-		signatures, _ := checkDomainSignatures(domain)
-		results <- DomainResult{
-			Domain:     domain,
-			Available:  available,
-			Error:      err,
-			Signatures: signatures,
-		}
-		time.Sleep(delay)
-	}
-}
 
 func printHelp() {
 	fmt.Println("Domain Scanner - A tool to check domain availability")
@@ -329,17 +90,17 @@ func main() {
 	}
 
 	// Determine regex mode
-	var regexModeEnum RegexMode
+	var regexModeEnum types.RegexMode
 	if *regexMode == "full" {
-		regexModeEnum = RegexModeFull
+		regexModeEnum = types.RegexModeFull
 	} else if *regexMode == "prefix" {
-		regexModeEnum = RegexModePrefix
+		regexModeEnum = types.RegexModePrefix
 	} else {
 		fmt.Println("Invalid regex-mode. Use 'full' or 'prefix'")
 		os.Exit(1)
 	}
 
-	domains := generateDomains(*length, *suffix, *pattern, *regexFilter, regexModeEnum)
+	domains := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter, regexModeEnum)
 	availableDomains := []string{}
 	registeredDomains := []string{}
 
@@ -351,11 +112,11 @@ func main() {
 
 	// Create channels for jobs and results
 	jobs := make(chan string, len(domains))
-	results := make(chan DomainResult, len(domains))
+	results := make(chan types.DomainResult, len(domains))
 
 	// Start workers
 	for w := 1; w <= *workers; w++ {
-		go worker(w, jobs, results, time.Duration(*delay)*time.Millisecond)
+		go worker.Worker(w, jobs, results, time.Duration(*delay)*time.Millisecond)
 	}
 
 	// Send jobs
