@@ -11,7 +11,7 @@ Thank you for your interest in contributing to Domain Scanner! This document pro
 ### Getting Started
 
 #### 1. Fork the Repository
-- Visit the [Domain Scanner repository](https://github.com/yourusername/domain_scanner)
+- Visit the [Domain Scanner repository](https://github.com/xuemian168/domain_scanner)
 - Click the "Fork" button in the top-right corner
 - This creates a copy of the repository in your GitHub account
 
