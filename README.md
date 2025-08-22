@@ -128,7 +128,7 @@ We welcome contributions from the community! Whether you're fixing bugs, adding 
 3. **Make Your Changes**: Follow our coding guidelines and test thoroughly
 4. **Submit a Pull Request**: Describe your changes and link any related issues
 
-For detailed contribution guidelines, development setup, and coding standards, please read our [CONTRIBUTION.md](CONTRIBUTION.md) file.
+For detailed contribution guidelines, development setup, and coding standards, please read our [CONTRIBUTING.md](./CONTRIBUTING.md) file.
 
 ### Quick Start for Contributors
 

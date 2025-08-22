@@ -118,7 +118,7 @@ go run main.go -l 3 -s .li -p D -r "^[a-z]{2}" -regex-mode prefix
 
 ## 贡献
 
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTION.md)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 我们欢迎社区贡献！无论您是修复错误、添加新功能、改进文档还是报告问题，我们都非常感谢您的帮助。
 
@@ -129,7 +129,7 @@ go run main.go -l 3 -s .li -p D -r "^[a-z]{2}" -regex-mode prefix
 3. **进行修改**：遵循编码规范并彻底测试
 4. **提交 Pull Request**：描述您的更改并链接相关问题
 
-有关详细的贡献指南、开发环境设置和编码标准，请阅读我们的 [CONTRIBUTION.md](CONTRIBUTION.md) 文件。
+有关详细的贡献指南、开发环境设置和编码标准，请阅读我们的 [CONTRIBUTING.md](./CONTRIBUTING.md) 文件。
 
 ### 贡献者快速开始
 
