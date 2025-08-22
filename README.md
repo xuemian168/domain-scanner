@@ -119,7 +119,38 @@ The tool includes robust error handling:
 
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions from the community! Whether you're fixing bugs, adding new features, improving documentation, or reporting issues, your help is appreciated.
+
+### How to Contribute
+
+1. **Fork the Repository**: Create your own copy of the project
+2. **Create a Feature Branch**: Work on your changes in a dedicated branch
+3. **Make Your Changes**: Follow our coding guidelines and test thoroughly
+4. **Submit a Pull Request**: Describe your changes and link any related issues
+
+For detailed contribution guidelines, development setup, and coding standards, please read our [CONTRIBUTION.md](CONTRIBUTION.md) file.
+
+### Quick Start for Contributors
+
+```bash
+# Fork and clone the repository
+git clone https://github.com/YOUR_USERNAME/domain-scanner.git
+cd domain-scanner
+
+# Set up development environment
+go mod download
+go build -o domain-scanner main.go
+
+# Create a feature branch
+git checkout -b feature/your-feature-name
+
+# Make changes and test
+go run main.go -l 2 -s .test -p D
+
+# Commit and push
+git commit -m "feat: your feature description"
+git push origin feature/your-feature-name
+```
 
 ## License
 
