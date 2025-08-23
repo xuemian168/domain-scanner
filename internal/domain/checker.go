@@ -93,14 +93,20 @@ func CheckDomainSignatures(domain string) ([]string, error) {
 	// 4. Check WHOIS information with retry
 	var whoisResult string
 	maxRetries := 3
+	baseDelay := 2 * time.Second
+
 	for i := 0; i < maxRetries; i++ {
 		result, err := whois.Whois(domain)
 		if err == nil {
 			whoisResult = result
 			break
 		}
+
+		// If there are still retry attempts, use exponential backoff
 		if i < maxRetries-1 {
-			time.Sleep(time.Second * 2)
+			// Calculate exponential delay: baseDelay * 2^i
+			delay := baseDelay * time.Duration(1<<i)
+			time.Sleep(delay)
 		}
 	}
 
@@ -287,6 +293,8 @@ func CheckDomainAvailability(domain string) (bool, error) {
 
 func checkWHOISAvailability(domain string) (bool, error) {
 	maxRetries := 3
+	baseDelay := 2 * time.Second
+
 	for i := 0; i < maxRetries; i++ {
 		result, err := whois.Whois(domain)
 		if err == nil {
@@ -303,8 +311,12 @@ func checkWHOISAvailability(domain string) (bool, error) {
 			}
 			break
 		}
+
+		// If there are still retry attempts, use exponential backoff
 		if i < maxRetries-1 {
-			time.Sleep(time.Second * 2)
+			// Calculate exponential delay: baseDelay * 2^i
+			delay := baseDelay * time.Duration(1<<i)
+			time.Sleep(delay)
 		}
 	}
 
