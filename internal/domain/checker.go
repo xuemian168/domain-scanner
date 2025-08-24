@@ -22,8 +22,9 @@ var (
 	whoisServers = []string{
 		"", // Default flow (IANA lookup)
 		"whois.nic.li:43",
-		"whois.iana.org:43",
 		"whois.verisign-grs.com:43",
+		"whois.porkbun.com:43",
+		"whois.godaddy.com:43",
 		"whois.internic.net:43",
 	}
 
