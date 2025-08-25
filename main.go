@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"sync"
@@ -43,6 +44,21 @@ func printHelp() {
 	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}[0-9]$\" -regex-mode full")
 	fmt.Println("\n  5. Use regex filter with prefix matching:")
 	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}\" -regex-mode prefix")
+}
+
+func calculateDomainsCount(pattern string, length int) int {
+	var charsetSize int
+	switch pattern {
+	case "d":
+		charsetSize = 10 // numbers 0-9
+	case "D":
+		charsetSize = 26 // letters a-z
+	case "a":
+		charsetSize = 36 // letters + numbers
+	default:
+		return 0
+	}
+	return int(math.Pow(float64(charsetSize), float64(length)))
 }
 
 func showMOTD() {
@@ -99,55 +115,149 @@ func main() {
 		os.Exit(1)
 	}
 
-	domains := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter, regexModeEnum)
+	// Calculate total domains count and warn user if too many
+	totalDomains := calculateDomainsCount(*pattern, *length)
+	if totalDomains > 1000000 && *regexFilter == "" { // More than 1 million domains without regex filter
+		fmt.Printf("\033[1;33mWarning: This configuration will generate %d domains.\033[0m\n", totalDomains)
+		fmt.Printf("This may consume significant memory and time. Consider:\n")
+		fmt.Printf("- Using shorter length (-l)\n")
+		fmt.Printf("- Adding regex filter (-r)\n")
+		fmt.Printf("- Using prefix matching (-regex-mode prefix)\n")
+		fmt.Printf("\nContinue? (y/N): ")
+		
+		var response string
+		fmt.Scanln(&response)
+		if response != "y" && response != "Y" {
+			fmt.Println("Operation cancelled.")
+			os.Exit(0)
+		}
+	} else if totalDomains > 1000000 && *regexFilter != "" {
+		fmt.Printf("\033[1;33mInfo: Base configuration would generate %d domains, but regex filter will reduce this significantly.\033[0m\n", totalDomains)
+	}
+
+	domainsChan := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter, regexModeEnum)
 	availableDomains := []string{}
 	registeredDomains := []string{}
 
-	fmt.Printf("Checking %d domains with pattern %s and length %d using %d workers...\n",
-		len(domains), *pattern, *length, *workers)
+	// Display domain checking info
 	if *regexFilter != "" {
-		fmt.Printf("Using regex filter: %s\n", *regexFilter)
+		fmt.Printf("Checking domains with pattern %s and length %d using %d workers...\n", *pattern, *length, *workers)
+		fmt.Printf("Using regex filter: %s (will show progress once generation completes)\n", *regexFilter)
+	} else {
+		fmt.Printf("Checking %d domains with pattern %s and length %d using %d workers...\n", totalDomains, *pattern, *length, *workers)
+		fmt.Println("⚠️  Large domain set - progress tracking will be approximate")
 	}
 
 	// Create channels for jobs and results
-	jobs := make(chan string, len(domains))
-	results := make(chan types.DomainResult, len(domains))
+	jobs := make(chan string, 1000)
+	results := make(chan types.DomainResult, 1000)
 
 	// Start workers
 	for w := 1; w <= *workers; w++ {
 		go worker.Worker(w, jobs, results, time.Duration(*delay)*time.Millisecond)
 	}
 
-	// Send jobs
-	for _, domain := range domains {
-		jobs <- domain
-	}
-	close(jobs)
-
 	// Create a channel for domain status messages
-	statusChan := make(chan string, len(domains))
+	statusChan := make(chan string, 1000)
 
-	// Start a goroutine to print status messages
+	// Start a goroutine to print status messages (above progress bar)
 	go func() {
 		for msg := range statusChan {
-			fmt.Println(msg)
+			fmt.Print("\r" + strings.Repeat(" ", 80) + "\r") // Clear progress bar
+			fmt.Println(msg)                                   // Print message
 		}
 	}()
 
-	// Collect results
-	var wg sync.WaitGroup
-	wg.Add(1)
+	// Track the number of active workers and jobs
+	var jobsWG sync.WaitGroup
+	domainsProcessed := 0
+
+	// Create channels for coordination
+	done := make(chan bool)
+	totalGenerated := make(chan int, 1)
+	
+	// Start a goroutine to feed domains from generator to workers
 	go func() {
-		defer wg.Done()
-		for i := 0; i < len(domains); i++ {
-			result := <-results
-			progress := fmt.Sprintf("[%d/%d]", i+1, len(domains))
+		defer close(jobs)
+		domainsGenerated := 0
+		for domain := range domainsChan {
+			domainsGenerated++
+			jobsWG.Add(1)
+			jobs <- domain
+			if domainsGenerated%1000 == 0 {
+				fmt.Printf("\rGenerated %d domains... (Workers processing in parallel)", domainsGenerated)
+			}
+		}
+		fmt.Printf("\nTotal domains to check: %d\n", domainsGenerated)
+		fmt.Println("Starting domain verification...")
+		totalGenerated <- domainsGenerated
+		
+		// Wait for all jobs to complete, then signal completion
+		jobsWG.Wait()
+		close(results)
+	}()
+
+	// Collect results with progress tracking
+	go func() {
+		defer func() { done <- true }()
+		defer close(statusChan)
+		
+		var total int
+		totalKnown := false
+		
+		for result := range results {
+			domainsProcessed++
+			
+			// Get total if available (non-blocking)
+			if !totalKnown {
+				select {
+				case total = <-totalGenerated:
+					totalKnown = true
+				default:
+					// Total not available yet
+				}
+			}
+			
+			// Create progress display
+			var progress string
+			var progressBar string
+			if totalKnown && total > 0 {
+				percentage := float64(domainsProcessed) / float64(total) * 100
+				barWidth := 40
+				filled := int(percentage / 100.0 * float64(barWidth))
+				bar := ""
+				for i := 0; i < barWidth; i++ {
+					if i < filled {
+						bar += "█"
+					} else {
+						bar += "░"
+					}
+				}
+				progress = fmt.Sprintf("[%d/%d]", domainsProcessed, total)
+				progressBar = fmt.Sprintf("\rProgress: %s [%s] %.1f%%", progress, bar, percentage)
+			} else if totalDomains > 0 && *regexFilter == "" {
+				// For large datasets without regex, show approximate progress
+				percentage := float64(domainsProcessed) / float64(totalDomains) * 100
+				barWidth := 40
+				filled := int(percentage / 100.0 * float64(barWidth))
+				bar := ""
+				for i := 0; i < barWidth; i++ {
+					if i < filled {
+						bar += "█"
+					} else {
+						bar += "░"
+					}
+				}
+				progress = fmt.Sprintf("[%d/~%d]", domainsProcessed, totalDomains)
+				progressBar = fmt.Sprintf("\rProgress: %s [%s] ~%.1f%%", progress, bar, percentage)
+			} else {
+				progress = fmt.Sprintf("[%d]", domainsProcessed)
+				progressBar = fmt.Sprintf("\rProgress: %s [Generating domains...]", progress)
+			}
+			
 			if result.Error != nil {
 				statusChan <- fmt.Sprintf("%s Error checking domain %s: %v", progress, result.Domain, result.Error)
-				continue
-			}
-
-			if result.Available {
+			} else if result.Available {
 				statusChan <- fmt.Sprintf("%s Domain %s is AVAILABLE!", progress, result.Domain)
 				availableDomains = append(availableDomains, result.Domain)
 			} else if *showRegistered {
@@ -155,10 +265,20 @@ func main() {
 				statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s]", progress, result.Domain, sigStr)
 				registeredDomains = append(registeredDomains, result.Domain)
 			}
+			
+			// Print progress bar
+			fmt.Print(progressBar)
+			
+			jobsWG.Done()
 		}
-		close(statusChan)
 	}()
-	wg.Wait()
+	
+	// Wait for completion
+	<-done
+	
+	// Clear progress bar and show completion
+	fmt.Print("\r" + strings.Repeat(" ", 80) + "\r")
+	fmt.Printf("✅ Domain checking completed!\n\n")
 
 	// Save available domains to file
 	availableFile := fmt.Sprintf("available_domains_%s_%d_%s.txt", *pattern, *length, strings.TrimPrefix(*suffix, "."))
@@ -202,7 +322,7 @@ func main() {
 		fmt.Printf("- Registered domains: %s\n", registeredFile)
 	}
 	fmt.Printf("\nSummary:\n")
-	fmt.Printf("- Total domains checked: %d\n", len(domains))
+	fmt.Printf("- Total domains checked: %d\n", domainsProcessed)
 	fmt.Printf("- Available domains: %d\n", len(availableDomains))
 	if *showRegistered {
 		fmt.Printf("- Registered domains: %d\n", len(registeredDomains))
