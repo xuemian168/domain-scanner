@@ -8,8 +8,8 @@ import (
 	"domain_scanner/internal/types"
 )
 
-func GenerateDomains(length int, suffix string, pattern string, regexFilter string, regexMode types.RegexMode) []string {
-	var domains []string
+// GenerateDomains returns a channel that streams domains instead of generating all at once
+func GenerateDomains(length int, suffix string, pattern string, regexFilter string, regexMode types.RegexMode) <-chan string {
 	letters := "abcdefghijklmnopqrstuvwxyz"
 	numbers := "0123456789"
 
@@ -23,23 +23,50 @@ func GenerateDomains(length int, suffix string, pattern string, regexFilter stri
 		}
 	}
 
-	switch pattern {
-	case "d":
-		generateCombinations(&domains, "", numbers, length, suffix, regex, regexMode)
-	case "D":
-		generateCombinations(&domains, "", letters, length, suffix, regex, regexMode)
-	case "a":
-		generateCombinations(&domains, "", letters+numbers, length, suffix, regex, regexMode)
-	default:
-		fmt.Println("Invalid pattern. Use -d for numbers, -D for letters, -a for alphanumeric")
-		os.Exit(1)
-	}
+	domainChan := make(chan string, 1000) // Buffer for better performance
 
-	return domains
+	go func() {
+		defer close(domainChan)
+		
+		switch pattern {
+		case "d":
+			generateCombinationsIterative(domainChan, numbers, length, suffix, regex, regexMode)
+		case "D":
+			generateCombinationsIterative(domainChan, letters, length, suffix, regex, regexMode)
+		case "a":
+			generateCombinationsIterative(domainChan, letters+numbers, length, suffix, regex, regexMode)
+		default:
+			fmt.Println("Invalid pattern. Use -d for numbers, -D for letters, -a for alphanumeric")
+			os.Exit(1)
+		}
+	}()
+
+	return domainChan
 }
 
-func generateCombinations(domains *[]string, current string, charset string, length int, suffix string, regex *regexp.Regexp, regexMode types.RegexMode) {
-	if len(current) == length {
+// generateCombinationsIterative uses iterative approach instead of recursive to avoid stack overflow
+func generateCombinationsIterative(domainChan chan<- string, charset string, length int, suffix string, regex *regexp.Regexp, regexMode types.RegexMode) {
+	charsetSize := len(charset)
+	if charsetSize == 0 || length <= 0 {
+		return
+	}
+
+	// Use counter-based approach for generating combinations
+	total := 1
+	for i := 0; i < length; i++ {
+		total *= charsetSize
+	}
+
+	for counter := 0; counter < total; counter++ {
+		current := ""
+		temp := counter
+		
+		// Generate domain string from counter
+		for i := 0; i < length; i++ {
+			current = string(charset[temp%charsetSize]) + current
+			temp /= charsetSize
+		}
+
 		domain := current + suffix
 		var match bool
 		switch regexMode {
@@ -50,12 +77,7 @@ func generateCombinations(domains *[]string, current string, charset string, len
 		}
 
 		if match {
-			*domains = append(*domains, domain)
+			domainChan <- domain
 		}
-		return
-	}
-
-	for _, c := range charset {
-		generateCombinations(domains, current+string(c), charset, length, suffix, regex, regexMode)
 	}
 }

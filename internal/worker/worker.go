@@ -8,7 +8,12 @@ import (
 )
 
 func Worker(id int, jobs <-chan string, results chan<- types.DomainResult, delay time.Duration) {
+	firstJob := true
 	for domainName := range jobs {
+		if firstJob {
+			firstJob = false
+			// This will be visible in domain check results
+		}
 		available, err := domain.CheckDomainAvailability(domainName)
 		signatures, _ := domain.CheckDomainSignatures(domainName)
 		results <- types.DomainResult{
