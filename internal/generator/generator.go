@@ -3,9 +3,9 @@ package generator
 import (
 	"fmt"
 	"os"
-	"regexp"
 
 	"domain_scanner/internal/types"
+	"github.com/dlclark/regexp2"
 )
 
 func GenerateDomains(length int, suffix string, pattern string, regexFilter string, regexMode types.RegexMode) []string {
@@ -13,10 +13,10 @@ func GenerateDomains(length int, suffix string, pattern string, regexFilter stri
 	letters := "abcdefghijklmnopqrstuvwxyz"
 	numbers := "0123456789"
 
-	var regex *regexp.Regexp
+	var regex *regexp2.Regexp
 	var err error
 	if regexFilter != "" {
-		regex, err = regexp.Compile(regexFilter)
+		regex, err = regexp2.Compile(regexFilter, regexp2.None)
 		if err != nil {
 			fmt.Printf("Invalid regex pattern: %v\n", err)
 			os.Exit(1)
@@ -38,15 +38,27 @@ func GenerateDomains(length int, suffix string, pattern string, regexFilter stri
 	return domains
 }
 
-func generateCombinations(domains *[]string, current string, charset string, length int, suffix string, regex *regexp.Regexp, regexMode types.RegexMode) {
+func generateCombinations(domains *[]string, current string, charset string, length int, suffix string, regex *regexp2.Regexp, regexMode types.RegexMode) {
 	if len(current) == length {
 		domain := current + suffix
 		var match bool
 		switch regexMode {
 		case types.RegexModeFull:
-			match = regex == nil || regex.MatchString(domain)
+			{
+				if regex == nil {
+					match = true
+					break
+				}
+				match, _ = regex.MatchString(domain)
+			}
 		case types.RegexModePrefix:
-			match = regex == nil || regex.MatchString(current)
+			{
+				if regex == nil {
+					match = true
+					break
+				}
+				match, _ = regex.MatchString(current)
+			}
 		}
 
 		if match {
