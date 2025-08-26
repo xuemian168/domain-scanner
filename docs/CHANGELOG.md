@@ -13,6 +13,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [1.3.2] - 2025-08-26
+
+### Added
+- Advanced regex support using `regexp2` library with backreferences
+- ReDoS attack protection with 100ms timeout mechanism
+- Regex complexity validation to block dangerous patterns
+- Security test suite with comprehensive ReDoS protection tests
+- Streaming domain generation architecture for memory efficiency
+- Advanced regex examples in documentation (e.g., `^(.)\\1{2}$` for repeating patterns)
+
+### Changed
+- Upgraded from standard `regexp` to `regexp2` for advanced regex features
+- Restored memory-efficient streaming architecture (`<-chan string`)
+- Replaced recursive domain generation with iterative approach
+- Enhanced error handling for regex matching operations
+- Updated help text to reflect new regex capabilities
+- Improved progress tracking with estimated domain count calculation
+
+### Fixed
+- Critical ReDoS vulnerability with timeout protection
+- Memory efficiency issues by restoring streaming architecture
+- Stack overflow potential in domain generation for large datasets
+- Error handling issues where regex matching errors were ignored
+- CI/CD build issues with proper dependency management
+
+### Security
+- **ReDoS Protection**: 100ms timeout on all regex operations
+- **Input Validation**: Automatic rejection of dangerous patterns like `(.*)*`, `(.+)+`, `(a+)+`
+- **Complexity Limits**: Maximum 200 characters per regex, limited quantifiers
+- **Safe Defaults**: Secure configuration out of the box
+- **Error Isolation**: Regex errors don't crash the application
+
+### Performance
+- Restored O(1) memory usage regardless of domain set size
+- Improved scalability for large domain generation tasks
+- Enhanced concurrent processing with proper channel management
+- Optimized regex matching with timeout protection
+
+### Documentation
+- Added comprehensive regex security guidelines
+- Updated README.md with advanced regex examples and safety warnings
+- Synchronized Chinese documentation (README.zh.md)
+- Enhanced CLAUDE.md with architectural changes and security features
+- Added security test examples and best practices
+
 ## [1.3.1] - 2025-08-24
 
 ### Added

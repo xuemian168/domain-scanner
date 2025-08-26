@@ -48,7 +48,7 @@ func printHelp() {
 func showMOTD() {
 	fmt.Println("\033[1;36m") // Cyan color
 	fmt.Println("╔════════════════════════════════════════════════════════════╗")
-	fmt.Println("║                    Domain Scanner v1.3.0                   ║")
+	fmt.Println("║                    Domain Scanner v1.3.2                   ║")
 	fmt.Println("║                                                            ║")
 	fmt.Println("║  A powerful tool for checking domain name availability     ║")
 	fmt.Println("║                                                            ║")
@@ -99,33 +99,37 @@ func main() {
 		os.Exit(1)
 	}
 
-	domains := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter, regexModeEnum)
+	domainChan := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter, regexModeEnum)
 	availableDomains := []string{}
 	registeredDomains := []string{}
 
+	// 计算总域名数量
+	totalDomains := calculateDomainsCount(*length, *pattern)
 	fmt.Printf("Checking %d domains with pattern %s and length %d using %d workers...\n",
-		len(domains), *pattern, *length, *workers)
+		totalDomains, *pattern, *length, *workers)
 	if *regexFilter != "" {
 		fmt.Printf("Using regex filter: %s\n", *regexFilter)
 	}
 
 	// Create channels for jobs and results
-	jobs := make(chan string, len(domains))
-	results := make(chan types.DomainResult, len(domains))
+	jobs := make(chan string, 1000)
+	results := make(chan types.DomainResult, 1000)
 
 	// Start workers
 	for w := 1; w <= *workers; w++ {
 		go worker.Worker(w, jobs, results, time.Duration(*delay)*time.Millisecond)
 	}
 
-	// Send jobs
-	for _, domain := range domains {
-		jobs <- domain
-	}
-	close(jobs)
+	// Send jobs from domain generator
+	go func() {
+		defer close(jobs)
+		for domain := range domainChan {
+			jobs <- domain
+		}
+	}()
 
 	// Create a channel for domain status messages
-	statusChan := make(chan string, len(domains))
+	statusChan := make(chan string, 1000)
 
 	// Start a goroutine to print status messages
 	go func() {
@@ -139,9 +143,10 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < len(domains); i++ {
-			result := <-results
-			progress := fmt.Sprintf("[%d/%d]", i+1, len(domains))
+		processedCount := 0
+		for result := range results {
+			processedCount++
+			progress := fmt.Sprintf("[%d/%d]", processedCount, totalDomains)
 			if result.Error != nil {
 				statusChan <- fmt.Sprintf("%s Error checking domain %s: %v", progress, result.Domain, result.Error)
 				continue
@@ -155,9 +160,26 @@ func main() {
 				statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s]", progress, result.Domain, sigStr)
 				registeredDomains = append(registeredDomains, result.Domain)
 			}
+
+			// 检查是否已处理完所有域名
+			if processedCount >= totalDomains {
+				break
+			}
 		}
 		close(statusChan)
 	}()
+
+	// 监控任务完成
+	go func() {
+		// 等待所有域名生成完毕
+		for range domainChan {
+			// domainChan 关闭后此循环结束
+		}
+		// 等待一段时间确保所有结果都被处理
+		time.Sleep(1 * time.Second)
+		close(results)
+	}()
+
 	wg.Wait()
 
 	// Save available domains to file
@@ -202,9 +224,30 @@ func main() {
 		fmt.Printf("- Registered domains: %s\n", registeredFile)
 	}
 	fmt.Printf("\nSummary:\n")
-	fmt.Printf("- Total domains checked: %d\n", len(domains))
+	fmt.Printf("- Total domains checked: %d\n", totalDomains)
 	fmt.Printf("- Available domains: %d\n", len(availableDomains))
 	if *showRegistered {
 		fmt.Printf("- Registered domains: %d\n", len(registeredDomains))
 	}
+}
+
+// calculateDomainsCount 计算给定模式和长度的域名总数
+func calculateDomainsCount(length int, pattern string) int {
+	var charsetSize int
+	switch pattern {
+	case "d": // 纯数字
+		charsetSize = 10 // 0-9
+	case "D": // 纯字母
+		charsetSize = 26 // a-z
+	case "a": // 字母数字
+		charsetSize = 36 // a-z + 0-9
+	default:
+		return 0
+	}
+
+	total := 1
+	for i := 0; i < length; i++ {
+		total *= charsetSize
+	}
+	return total
 }

@@ -21,7 +21,11 @@ A powerful domain name availability checker written in Go. This tool helps you f
   - DNS records (NS, A, MX)
   - WHOIS information
   - SSL certificate verification
-- **Advanced Filtering**: Filter domains using regular expressions
+- **Advanced Filtering**: Filter domains using powerful regular expressions with regexp2 support
+  - Backreferences for patterns like repeating characters
+  - Lookarounds and Unicode properties
+  - Perl-compatible regex syntax
+- **Security Enhanced**: Built-in protection against ReDoS attacks
 - **Concurrent Processing**: Multi-threaded domain checking with configurable worker count
 - **Smart Error Handling**: Automatic retry mechanism for failed queries
 - **Detailed Results**: Shows verification signatures for registered domains
@@ -51,7 +55,7 @@ go run main.go [options]
   - `d`: Pure numbers (e.g., 123.li)
   - `D`: Pure letters (e.g., abc.li)
   - `a`: Alphanumeric (e.g., a1b.li)
-- `-r string`: Regex filter for domain names
+- `-r string`: Regex filter for domain names (supports advanced regexp2 features)
 - `-regex-mode string`: Regex matching mode (default: full)
   - `full`: Match entire domain name
   - `prefix`: Match only domain name prefix
@@ -87,6 +91,15 @@ go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$" -regex-mode full
 go run main.go -l 3 -s .li -p D -r "^[a-z]{2}" -regex-mode prefix
 ```
 
+6. Use advanced regexp2 features (backreferences for repeating patterns):
+```bash
+# Find domains with pattern like "aaa", "bbb", "ccc" (same letter repeated)
+go run main.go -l 3 -s .li -p D -r "^(.)\1{2}$" -regex-mode full
+
+# Find domains with pattern like "abab", "cdcd" (two letters repeated)
+go run main.go -l 4 -s .li -p D -r "^(..)\1$" -regex-mode full
+```
+
 ## Output Format
 
 ### Progress Display
@@ -107,11 +120,48 @@ go run main.go -l 3 -s .li -p D -r "^[a-z]{2}" -regex-mode prefix
 - Available domains: `available_domains_[pattern]_[length]_[suffix].txt`
 - Registered domains: `registered_domains_[pattern]_[length]_[suffix].txt`
 
+## Advanced Regex Features
+
+This tool uses the powerful `regexp2` library, providing advanced regex capabilities:
+
+### Backreferences
+Match previously captured groups using `\1`, `\2`, etc:
+- `^(.)\1{2}$` - Matches domains like "aaa.li", "bbb.li" (same character repeated 3 times)
+- `^(..)\1$` - Matches domains like "abab.li", "cdcd.li" (two characters repeated)
+- `^(.)(..)\1\2$` - More complex backreference patterns
+
+### Safety Features
+- **ReDoS Protection**: Built-in timeout protection (100ms) prevents catastrophic backtracking
+- **Input Validation**: Automatically rejects potentially dangerous regex patterns
+- **Complexity Limits**: Maximum 200 characters, limited quantifiers
+- **Error Handling**: Graceful handling of regex matching errors
+
+### Security Guidelines
+⚠️ **Important**: Be careful with complex regex patterns to avoid performance issues.
+
+**Safe patterns:**
+```bash
+# Simple character classes and quantifiers
+-r "^[a-z]{2}[0-9]$"
+-r "^(test|demo|temp)"
+-r "^[a-z]*[0-9]+$"
+```
+
+**Potentially dangerous patterns (automatically blocked):**
+```bash
+# These patterns are blocked for security
+-r "(.*)*"     # Nested quantifiers
+-r "(.+)+"     # Catastrophic backtracking
+-r "(a+)+"     # ReDoS attack pattern
+```
+
 ## Error Handling
 
 The tool includes robust error handling:
 - Automatic retry mechanism for WHOIS queries (3 attempts)
 - Timeout settings for SSL certificate checks
+- Regex timeout protection (100ms) against ReDoS attacks
+- Input validation for regex patterns
 - Graceful handling of network issues
 - Detailed error reporting
 
@@ -159,6 +209,14 @@ git push origin feature/your-feature-name
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details. 
 
 ## Recent Updates
+
+### v1.3.2 - 2025-08-26
+- **Security**: Added ReDoS attack protection with regex timeout (100ms)
+- **Security**: Implemented regex complexity validation and dangerous pattern detection
+- **Performance**: Restored memory-efficient streaming architecture
+- **Enhancement**: Upgraded to regexp2 for advanced regex features (backreferences, lookarounds)
+- **Enhancement**: Added comprehensive regex safety guidelines and examples
+- **Stability**: Improved error handling for regex matching operations
 
 ### v1.3.1 - 2025-08-24
 - **Added**: Multiple WHOIS server support for improved reliability

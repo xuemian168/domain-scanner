@@ -1,12 +1,49 @@
+# Binaries for programs and plugins
 *.exe
+*.exe~
 *.dll
 *.so
 *.dylib
+
+# Test binary, built with `go test -c`
 *.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+# Build artifacts
+domain-scanner
+main
+
+# Output files from domain scanning
 available_domains_*
 registered_domains_*
+
+# Go workspace files
 go.work
 go.work.sum
 
+# Environment variables and local config
 .env
+.env.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.orig

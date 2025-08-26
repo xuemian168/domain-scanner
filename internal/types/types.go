@@ -10,6 +10,6 @@ type DomainResult struct {
 type RegexMode int
 
 const (
-	RegexModeFull   RegexMode = iota
+	RegexModeFull RegexMode = iota
 	RegexModePrefix
 )

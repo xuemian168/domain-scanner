@@ -31,17 +31,17 @@ func NewDomainCache(ttl time.Duration) *DomainCache {
 func (dc *DomainCache) Get(domain string) (available bool, signatures []string, found bool) {
 	dc.mu.RLock()
 	defer dc.mu.RUnlock()
-	
+
 	entry, exists := dc.cache[domain]
 	if !exists {
 		return false, nil, false
 	}
-	
+
 	// Check if entry is expired
 	if time.Since(entry.Timestamp) > dc.ttl {
 		return false, nil, false
 	}
-	
+
 	return entry.Available, entry.Signatures, true
 }
 
@@ -49,7 +49,7 @@ func (dc *DomainCache) Get(domain string) (available bool, signatures []string, 
 func (dc *DomainCache) Set(domain string, available bool, signatures []string) {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
-	
+
 	dc.cache[domain] = &CacheEntry{
 		Available:  available,
 		Signatures: signatures,
@@ -61,7 +61,7 @@ func (dc *DomainCache) Set(domain string, available bool, signatures []string) {
 func (dc *DomainCache) Clean() {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
-	
+
 	now := time.Now()
 	for domain, entry := range dc.cache {
 		if now.Sub(entry.Timestamp) > dc.ttl {
@@ -75,7 +75,7 @@ func (dc *DomainCache) StartCleanupRoutine(interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-		
+
 		for range ticker.C {
 			dc.Clean()
 		}
