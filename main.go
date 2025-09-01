@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"domain_scanner/internal/generator"
@@ -24,10 +25,7 @@ func printHelp() {
 	fmt.Println("              d: Pure numbers (e.g., 123.li)")
 	fmt.Println("              D: Pure letters (e.g., abc.li)")
 	fmt.Println("              a: Alphanumeric (e.g., a1b.li)")
-	fmt.Println("  -r string   Regex filter for domain names")
-	fmt.Println("  -regex-mode string Regex matching mode (default: full)")
-	fmt.Println("    full: Match entire domain name")
-	fmt.Println("    prefix: Match only domain name prefix")
+	fmt.Println("  -r string   Regex filter for domain name prefix")
 	fmt.Println("  -delay int  Delay between queries in milliseconds (default: 1000)")
 	fmt.Println("  -workers int Number of concurrent workers (default: 10)")
 	fmt.Println("  -show-registered Show registered domains in output (default: false)")
@@ -39,16 +37,16 @@ func printHelp() {
 	fmt.Println("     go run main.go -l 3 -s .li -p D -delay 500 -workers 15")
 	fmt.Println("\n  3. Show both available and registered domains:")
 	fmt.Println("     go run main.go -l 3 -s .li -p D -show-registered")
-	fmt.Println("\n  4. Use regex filter with full domain matching:")
-	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}[0-9]$\" -regex-mode full")
-	fmt.Println("\n  5. Use regex filter with prefix matching:")
-	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}\" -regex-mode prefix")
+	fmt.Println("\n  4. Use regex filter to match domain prefix:")
+	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}[0-9]$\"")
+	fmt.Println("\n  5. Find domains starting with specific letters:")
+	fmt.Println("     go run main.go -l 5 -s .li -p D -r \"^abc\"")
 }
 
 func showMOTD() {
 	fmt.Println("\033[1;36m") // Cyan color
 	fmt.Println("╔════════════════════════════════════════════════════════════╗")
-	fmt.Println("║                    Domain Scanner v1.3.2                   ║")
+	fmt.Println("║                    Domain Scanner v1.3.3                   ║")
 	fmt.Println("║                                                            ║")
 	fmt.Println("║  A powerful tool for checking domain name availability     ║")
 	fmt.Println("║                                                            ║")
@@ -75,7 +73,6 @@ func main() {
 	workers := flag.Int("workers", 10, "Number of concurrent workers")
 	showRegistered := flag.Bool("show-registered", false, "Show registered domains in output")
 	help := flag.Bool("h", false, "Show help information")
-	regexMode := flag.String("regex-mode", "full", "Regex match mode: 'full' or 'prefix'")
 	flag.Parse()
 
 	if *help {
@@ -88,25 +85,15 @@ func main() {
 		*suffix = "." + *suffix
 	}
 
-	// Determine regex mode
-	var regexModeEnum types.RegexMode
-	if *regexMode == "full" {
-		regexModeEnum = types.RegexModeFull
-	} else if *regexMode == "prefix" {
-		regexModeEnum = types.RegexModePrefix
-	} else {
-		fmt.Println("Invalid regex-mode. Use 'full' or 'prefix'")
-		os.Exit(1)
-	}
-
-	domainChan := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter, regexModeEnum)
+	domainGen := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter)
+	domainChan := domainGen.Domains
 	availableDomains := []string{}
 	registeredDomains := []string{}
 
-	// 计算总域名数量
-	totalDomains := calculateDomainsCount(*length, *pattern)
-	fmt.Printf("Checking %d domains with pattern %s and length %d using %d workers...\n",
-		totalDomains, *pattern, *length, *workers)
+	// 获取预估域名数量
+	estimatedDomains := domainGen.TotalCount
+	fmt.Printf("Checking estimated %d domains with pattern %s and length %d using %d workers...\n",
+		estimatedDomains, *pattern, *length, *workers)
 	if *regexFilter != "" {
 		fmt.Printf("Using regex filter: %s\n", *regexFilter)
 	}
@@ -146,7 +133,7 @@ func main() {
 		processedCount := 0
 		for result := range results {
 			processedCount++
-			progress := fmt.Sprintf("[%d/%d]", processedCount, totalDomains)
+			progress := fmt.Sprintf("[%d]", processedCount)
 			if result.Error != nil {
 				statusChan <- fmt.Sprintf("%s Error checking domain %s: %v", progress, result.Domain, result.Error)
 				continue
@@ -160,23 +147,21 @@ func main() {
 				statusChan <- fmt.Sprintf("%s Domain %s is REGISTERED [%s]", progress, result.Domain, sigStr)
 				registeredDomains = append(registeredDomains, result.Domain)
 			}
-
-			// 检查是否已处理完所有域名
-			if processedCount >= totalDomains {
-				break
-			}
 		}
 		close(statusChan)
 	}()
 
-	// 监控任务完成
+	// 监控任务完成 - 等待所有jobs处理完成后关闭results
 	go func() {
-		// 等待所有域名生成完毕
-		for range domainChan {
-			// domainChan 关闭后此循环结束
+		// 等待所有域名生成完成（jobs channel关闭）
+		for range jobs {
+			// 当jobs channel关闭时，这个循环会结束
 		}
-		// 等待一段时间确保所有结果都被处理
-		time.Sleep(1 * time.Second)
+
+		// 给所有worker足够的时间处理剩余的任务
+		time.Sleep(3 * time.Second)
+
+		// 关闭results channel，结束结果收集
 		close(results)
 	}()
 
@@ -218,36 +203,19 @@ func main() {
 		}
 	}
 
+	// 获取实际生成的域名数量
+	actualDomainsGenerated := atomic.LoadInt64(domainGen.Generated)
+	actualDomainsChecked := int(actualDomainsGenerated)
+
 	fmt.Printf("\n\nResults saved to:\n")
 	fmt.Printf("- Available domains: %s\n", availableFile)
 	if *showRegistered {
 		fmt.Printf("- Registered domains: %s\n", registeredFile)
 	}
 	fmt.Printf("\nSummary:\n")
-	fmt.Printf("- Total domains checked: %d\n", totalDomains)
+	fmt.Printf("- Total domains checked: %d\n", actualDomainsChecked)
 	fmt.Printf("- Available domains: %d\n", len(availableDomains))
 	if *showRegistered {
 		fmt.Printf("- Registered domains: %d\n", len(registeredDomains))
 	}
-}
-
-// calculateDomainsCount 计算给定模式和长度的域名总数
-func calculateDomainsCount(length int, pattern string) int {
-	var charsetSize int
-	switch pattern {
-	case "d": // 纯数字
-		charsetSize = 10 // 0-9
-	case "D": // 纯字母
-		charsetSize = 26 // a-z
-	case "a": // 字母数字
-		charsetSize = 36 // a-z + 0-9
-	default:
-		return 0
-	}
-
-	total := 1
-	for i := 0; i < length; i++ {
-		total *= charsetSize
-	}
-	return total
 }

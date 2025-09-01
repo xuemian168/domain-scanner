@@ -55,10 +55,7 @@ go run main.go [options]
   - `d`: Pure numbers (e.g., 123.li)
   - `D`: Pure letters (e.g., abc.li)
   - `a`: Alphanumeric (e.g., a1b.li)
-- `-r string`: Regex filter for domain names (supports advanced regexp2 features)
-- `-regex-mode string`: Regex matching mode (default: full)
-  - `full`: Match entire domain name
-  - `prefix`: Match only domain name prefix
+- `-r string`: Regex filter for domain name prefix (supports advanced regexp2 features)
 - `-delay int`: Delay between queries in milliseconds (default: 1000)
 - `-workers int`: Number of concurrent workers (default: 10)
 - `-show-registered`: Show registered domains in output (default: false)
@@ -81,23 +78,23 @@ go run main.go -l 3 -s .li -p D -delay 500 -workers 15
 go run main.go -l 3 -s .li -p D -show-registered
 ```
 
-4. Use regex filter with full domain matching:
+4. Use regex filter to match domain prefix:
 ```bash
-go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$" -regex-mode full
+go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$"
 ```
 
-5. Use regex filter with prefix matching:
+5. Find domains starting with specific letters:
 ```bash
-go run main.go -l 3 -s .li -p D -r "^[a-z]{2}" -regex-mode prefix
+go run main.go -l 5 -s .li -p D -r "^abc"
 ```
 
 6. Use advanced regexp2 features (backreferences for repeating patterns):
 ```bash
 # Find domains with pattern like "aaa", "bbb", "ccc" (same letter repeated)
-go run main.go -l 3 -s .li -p D -r "^(.)\1{2}$" -regex-mode full
+go run main.go -l 3 -s .li -p D -r "^(.)\1{2}$"
 
 # Find domains with pattern like "abab", "cdcd" (two letters repeated)
-go run main.go -l 4 -s .li -p D -r "^(..)\1$" -regex-mode full
+go run main.go -l 4 -s .li -p D -r "^(..)\1$"
 ```
 
 ## Output Format
@@ -125,9 +122,9 @@ go run main.go -l 4 -s .li -p D -r "^(..)\1$" -regex-mode full
 This tool uses the powerful `regexp2` library, providing advanced regex capabilities:
 
 ### Backreferences
-Match previously captured groups using `\1`, `\2`, etc:
-- `^(.)\1{2}$` - Matches domains like "aaa.li", "bbb.li" (same character repeated 3 times)
-- `^(..)\1$` - Matches domains like "abab.li", "cdcd.li" (two characters repeated)
+Match previously captured groups using `\1`, `\2`, etc. All regex patterns match domain prefix only:
+- `^(.)\1{2}$` - Matches domain prefixes like "aaa", "bbb" (same character repeated 3 times)
+- `^(..)\1$` - Matches domain prefixes like "abab", "cdcd" (two characters repeated)
 - `^(.)(..)\1\2$` - More complex backreference patterns
 
 ### Safety Features

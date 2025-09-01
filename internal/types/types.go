@@ -6,10 +6,3 @@ type DomainResult struct {
 	Error      error
 	Signatures []string
 }
-
-type RegexMode int
-
-const (
-	RegexModeFull RegexMode = iota
-	RegexModePrefix
-)

@@ -13,6 +13,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [1.3.3] - 2025-09-02
+
+### Fixed
+- **Critical**: Fixed Windows release binary execution issue causing instant completion with empty results
+- **Critical**: Resolved concurrent processing race conditions that affected all platforms 
+- **Critical**: Fixed domain generation and processing pipeline synchronization issues
+
+### Changed
+- Simplified regex functionality: removed complex regex-mode parameter, all regex now matches domain prefix only
+- Improved concurrent processing reliability with better goroutine synchronization
+- Enhanced domain counting accuracy using atomic operations
+- Streamlined command-line interface by removing unnecessary regex-mode complexity
+
+### Technical Improvements
+- Replaced unreliable `processedCount >= totalDomains` checks with proper channel-based synchronization
+- Fixed monitoring goroutine logic that was causing premature result collection termination  
+- Added proper channel closing sequence with adequate worker completion time
+- Implemented atomic counters for accurate domain generation tracking
+- Simplified generator interface to remove RegexMode complexity
+
+### Added
+
+### Performance
+- Eliminated race conditions that caused "instant completion with 0 results" 
+- Ensured all generated domains are properly processed and checked
+- Improved processing accuracy and reliability across all platforms
+
 ## [1.3.2] - 2025-08-26
 
 ### Added

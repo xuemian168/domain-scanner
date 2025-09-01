@@ -57,10 +57,7 @@ go run main.go [选项]
 - `-workers int`: 并发工作线程数（默认：10）
 - `-show-registered`: 在输出中显示已注册的域名（默认：false）
 - `-h`: 显示帮助信息
-- `-r string`: 域名正则表达式过滤器
-- `-regex-mode string`: 正则表达式匹配模式（默认：full）
-  - `full`：匹配完整域名
-  - `prefix`：仅匹配域名前缀
+- `-r string`: 域名前缀正则表达式过滤器
 
 ### 示例
 
@@ -79,14 +76,14 @@ go run main.go -l 3 -s .li -p D -delay 500 -workers 15
 go run main.go -l 3 -s .li -p D -show-registered
 ```
 
-4. 使用完整域名正则表达式过滤：
+4. 使用正则表达式过滤域名前缀：
 ```bash
-go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$" -regex-mode full
+go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$"
 ```
 
-5. 使用域名前缀正则表达式过滤：
+5. 查找以特定字母开头的域名：
 ```bash
-go run main.go -l 3 -s .li -p D -r "^[a-z]{2}" -regex-mode prefix
+go run main.go -l 5 -s .li -p D -r "^abc"
 ```
 
 ## 输出格式

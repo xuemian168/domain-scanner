@@ -4,14 +4,21 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
-	"domain_scanner/internal/types"
 	"github.com/dlclark/regexp2"
 )
 
-// GenerateDomains 返回一个流式域名 channel，而不是一次性生成所有域名
-func GenerateDomains(length int, suffix string, pattern string, regexFilter string, regexMode types.RegexMode) <-chan string {
+// DomainGenerator 包含生成的域名和计数信息
+type DomainGenerator struct {
+	Domains     <-chan string
+	TotalCount  int
+	Generated   *int64 // 用atomic操作的计数器
+}
+
+// GenerateDomains 返回一个包含域名和计数信息的结构体
+func GenerateDomains(length int, suffix string, pattern string, regexFilter string) *DomainGenerator {
 	letters := "abcdefghijklmnopqrstuvwxyz"
 	numbers := "0123456789"
 
@@ -35,28 +42,50 @@ func GenerateDomains(length int, suffix string, pattern string, regexFilter stri
 	}
 
 	domainChan := make(chan string, 1000) // 缓冲池以提高性能
+	var generated int64 = 0
+	var totalEstimated int
+	
+	// 计算预估总数
+	var charsetSize int
+	switch pattern {
+	case "d":
+		charsetSize = len(numbers)
+	case "D":
+		charsetSize = len(letters)
+	case "a":
+		charsetSize = len(letters + numbers)
+	}
+	
+	totalEstimated = 1
+	for i := 0; i < length; i++ {
+		totalEstimated *= charsetSize
+	}
 
 	go func() {
 		defer close(domainChan)
 
 		switch pattern {
 		case "d":
-			generateCombinationsIterative(domainChan, numbers, length, suffix, regex, regexMode)
+			generateCombinationsIterative(domainChan, numbers, length, suffix, regex, &generated)
 		case "D":
-			generateCombinationsIterative(domainChan, letters, length, suffix, regex, regexMode)
+			generateCombinationsIterative(domainChan, letters, length, suffix, regex, &generated)
 		case "a":
-			generateCombinationsIterative(domainChan, letters+numbers, length, suffix, regex, regexMode)
+			generateCombinationsIterative(domainChan, letters+numbers, length, suffix, regex, &generated)
 		default:
 			fmt.Println("Invalid pattern. Use -d for numbers, -D for letters, -a for alphanumeric")
 			os.Exit(1)
 		}
 	}()
 
-	return domainChan
+	return &DomainGenerator{
+		Domains:    domainChan,
+		TotalCount: totalEstimated,
+		Generated:  &generated,
+	}
 }
 
 // generateCombinationsIterative 使用迭代方法而非递归方法防止堆栈溢出
-func generateCombinationsIterative(domainChan chan<- string, charset string, length int, suffix string, regex *regexp2.Regexp, regexMode types.RegexMode) {
+func generateCombinationsIterative(domainChan chan<- string, charset string, length int, suffix string, regex *regexp2.Regexp, generated *int64) {
 	charsetSize := len(charset)
 	if charsetSize == 0 || length <= 0 {
 		return
@@ -79,34 +108,24 @@ func generateCombinationsIterative(domainChan chan<- string, charset string, len
 		}
 
 		domain := current + suffix
+		
+		// 正则过滤（只对域名前缀进行匹配）
 		var match bool
-		switch regexMode {
-		case types.RegexModeFull:
-			if regex == nil {
-				match = true
-			} else {
-				var err error
-				match, err = safeRegexMatch(regex, domain)
-				if err != nil {
-					// 正则匹配错误时跳过该域名
-					match = false
-				}
-			}
-		case types.RegexModePrefix:
-			if regex == nil {
-				match = true
-			} else {
-				var err error
-				match, err = safeRegexMatch(regex, current)
-				if err != nil {
-					// 正则匹配错误时跳过该域名
-					match = false
-				}
+		if regex == nil {
+			match = true
+		} else {
+			var err error
+			match, err = safeRegexMatch(regex, current)
+			if err != nil {
+				// 正则匹配错误时跳过该域名
+				match = false
 			}
 		}
 
 		if match {
 			domainChan <- domain
+			// 使用atomic操作增加计数器
+			atomic.AddInt64(generated, 1)
 		}
 	}
 }
