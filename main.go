@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
@@ -29,6 +30,7 @@ func printHelp() {
 	fmt.Println("  -delay int  Delay between queries in milliseconds (default: 1000)")
 	fmt.Println("  -workers int Number of concurrent workers (default: 10)")
 	fmt.Println("  -show-registered Show registered domains in output (default: false)")
+	fmt.Println("  -force      Skip performance warnings for large domain sets (default: false)")
 	fmt.Println("  -h          Show help information")
 	fmt.Println("\nExamples:")
 	fmt.Println("  1. Check 3-letter .li domains with 20 workers:")
@@ -41,6 +43,73 @@ func printHelp() {
 	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}[0-9]$\"")
 	fmt.Println("\n  5. Find domains starting with specific letters:")
 	fmt.Println("     go run main.go -l 5 -s .li -p D -r \"^abc\"")
+	fmt.Println("\n  6. Skip performance warning for large domain sets:")
+	fmt.Println("     go run main.go -l 7 -s .li -p D -force")
+}
+
+func showPerformanceWarning(length int, pattern string, delay int, workers int) {
+	var charsetSize int
+	switch pattern {
+	case "d":
+		charsetSize = 10 // 0-9
+	case "D":
+		charsetSize = 26 // a-z
+	case "a":
+		charsetSize = 36 // a-z + 0-9
+	default:
+		charsetSize = 26
+	}
+
+	totalDomains := 1
+	for i := 0; i < length; i++ {
+		totalDomains *= charsetSize
+	}
+
+	// 估算时间（基于延迟和worker数）
+	estimatedSeconds := (totalDomains * delay) / (workers * 1000)
+	estimatedHours := estimatedSeconds / 3600
+	estimatedDays := estimatedHours / 24
+
+	fmt.Println("\n\033[1;33m⚠️  PERFORMANCE WARNING ⚠️\033[0m")
+	fmt.Println("═══════════════════════════════════════════════════════")
+	fmt.Printf("You are about to scan \033[1;31m%d domains\033[0m with the following settings:\n", totalDomains)
+	fmt.Printf("• Pattern: %s (charset size: %d)\n", pattern, charsetSize)
+	fmt.Printf("• Length: %d characters\n", length)
+	fmt.Printf("• Workers: %d\n", workers)
+	fmt.Printf("• Delay: %d ms between queries\n", delay)
+	fmt.Println()
+
+	fmt.Println("📊 \033[1;36mEstimated Impact:\033[0m")
+	if estimatedDays >= 1 {
+		fmt.Printf("• Scan time: ~%.1f days (%.1f hours)\n", float64(estimatedDays), float64(estimatedHours))
+	} else if estimatedHours >= 1 {
+		fmt.Printf("• Scan time: ~%.1f hours (%.0f minutes)\n", float64(estimatedHours), float64(estimatedHours)*60)
+	} else {
+		fmt.Printf("• Scan time: ~%.0f minutes\n", float64(estimatedSeconds)/60)
+	}
+	fmt.Printf("• Network requests: %d total\n", totalDomains)
+	fmt.Printf("• Memory usage: High (processing %d domains)\n", totalDomains)
+	fmt.Println()
+
+	fmt.Println("💡 \033[1;32mRecommendations:\033[0m")
+	fmt.Println("• Use regex filter (-r) to narrow down the search")
+	fmt.Println("• Consider shorter domain length (-l)")
+	fmt.Println("• Increase workers (-workers) for faster processing")
+	fmt.Println("• Decrease delay (-delay) if your network can handle it")
+	fmt.Println("• Use -force flag to skip this warning next time")
+	fmt.Println("═══════════════════════════════════════════════════════")
+}
+
+func confirmContinue() bool {
+	fmt.Print("\nDo you want to continue? (y/N): ")
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+	return response == "y" || response == "yes"
 }
 
 func showMOTD() {
@@ -72,6 +141,7 @@ func main() {
 	delay := flag.Int("delay", 1000, "Delay between queries in milliseconds")
 	workers := flag.Int("workers", 10, "Number of concurrent workers")
 	showRegistered := flag.Bool("show-registered", false, "Show registered domains in output")
+	force := flag.Bool("force", false, "Skip performance warnings for large domain sets")
 	help := flag.Bool("h", false, "Show help information")
 	flag.Parse()
 
@@ -83,6 +153,16 @@ func main() {
 	// Ensure suffix starts with a dot
 	if !strings.HasPrefix(*suffix, ".") {
 		*suffix = "." + *suffix
+	}
+
+	// Performance warning for large domain sets
+	if *length > 5 && !*force {
+		showPerformanceWarning(*length, *pattern, *delay, *workers)
+		if !confirmContinue() {
+			fmt.Println("Scan cancelled by user.")
+			os.Exit(0)
+		}
+		fmt.Println()
 	}
 
 	domainGen := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter)

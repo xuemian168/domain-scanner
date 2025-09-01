@@ -26,6 +26,9 @@ A powerful domain name availability checker written in Go. This tool helps you f
   - Lookarounds and Unicode properties
   - Perl-compatible regex syntax
 - **Security Enhanced**: Built-in protection against ReDoS attacks
+- **Performance Warning System**: Intelligent warnings for large domain scans with detailed impact analysis
+- **Smart Scan Estimation**: Automatic calculation of scan time, network load, and resource usage
+- **User Safety Protection**: Prevents accidental execution of multi-day scan operations
 - **Concurrent Processing**: Multi-threaded domain checking with configurable worker count
 - **Smart Error Handling**: Automatic retry mechanism for failed queries
 - **Detailed Results**: Shows verification signatures for registered domains
@@ -59,6 +62,7 @@ go run main.go [options]
 - `-delay int`: Delay between queries in milliseconds (default: 1000)
 - `-workers int`: Number of concurrent workers (default: 10)
 - `-show-registered`: Show registered domains in output (default: false)
+- `-force`: Skip performance warnings for large domain sets (default: false)
 - `-h`: Show help information
 
 ### Examples
@@ -95,6 +99,57 @@ go run main.go -l 3 -s .li -p D -r "^(.)\1{2}$"
 
 # Find domains with pattern like "abab", "cdcd" (two letters repeated)
 go run main.go -l 4 -s .li -p D -r "^(..)\1$"
+```
+
+7. Skip performance warning for large domain sets:
+```bash
+go run main.go -l 7 -s .li -p D -force
+```
+
+## Performance Warning System
+
+The tool includes an intelligent performance warning system to protect users from accidentally running extremely large scans:
+
+### When Warnings Are Triggered
+- Automatically triggered when domain length (`-l`) is greater than 5
+- Displays detailed impact analysis before starting the scan
+
+### Warning Information Provided
+- **Domain Count**: Exact number of domains to be scanned
+- **Time Estimation**: Calculated scan duration based on your settings
+- **Network Load**: Total number of network requests that will be made
+- **Resource Impact**: Memory and CPU usage warnings
+
+### Example Warning Output
+```
+⚠️  PERFORMANCE WARNING ⚠️
+═══════════════════════════════════════════════════════
+You are about to scan 308915776 domains with the following settings:
+• Pattern: D (charset size: 26)
+• Length: 6 characters
+• Workers: 10
+• Delay: 1000 ms between queries
+
+📊 Estimated Impact:
+• Scan time: ~357.0 days (8580.0 hours)
+• Network requests: 308915776 total
+• Memory usage: High (processing 308915776 domains)
+
+💡 Recommendations:
+• Use regex filter (-r) to narrow down the search
+• Consider shorter domain length (-l)
+• Increase workers (-workers) for faster processing
+• Decrease delay (-delay) if your network can handle it
+• Use -force flag to skip this warning next time
+═══════════════════════════════════════════════════════
+
+Do you want to continue? (y/N):
+```
+
+### Bypassing Warnings
+Use the `-force` flag to skip performance warnings:
+```bash
+go run main.go -l 6 -s .com -p D -force
 ```
 
 ## Output Format

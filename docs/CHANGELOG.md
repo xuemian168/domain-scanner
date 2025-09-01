@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.3] - 2025-09-02
 
+### Added
+- **Performance Warning System**: Intelligent warnings for large domain scans (length > 5)
+- **Smart Scan Estimation**: Automatic calculation of scan time, network load, and resource usage
+- **User Safety Protection**: Prevents accidental execution of multi-day scan operations
+- **Force Skip Option**: New `-force` flag to bypass warnings for advanced users and automation
+
 ### Fixed
 - **Critical**: Fixed Windows release binary execution issue causing instant completion with empty results
 - **Critical**: Resolved concurrent processing race conditions that affected all platforms 
@@ -25,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved concurrent processing reliability with better goroutine synchronization
 - Enhanced domain counting accuracy using atomic operations
 - Streamlined command-line interface by removing unnecessary regex-mode complexity
+- Enhanced user experience with detailed performance impact analysis
+- Added interactive confirmation for potentially long-running scans
+- Improved help documentation with performance considerations
 
 ### Technical Improvements
 - Replaced unreliable `processedCount >= totalDomains` checks with proper channel-based synchronization
