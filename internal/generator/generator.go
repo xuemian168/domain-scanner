@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -18,7 +19,7 @@ type DomainGenerator struct {
 }
 
 // GenerateDomains 返回一个包含域名和计数信息的结构体
-func GenerateDomains(length int, suffix string, pattern string, regexFilter string) *DomainGenerator {
+func GenerateDomains(length int, suffix string, pattern string, regexFilter string, dictFile string) *DomainGenerator {
 	letters := "abcdefghijklmnopqrstuvwxyz"
 	numbers := "0123456789"
 
@@ -45,35 +46,52 @@ func GenerateDomains(length int, suffix string, pattern string, regexFilter stri
 	var generated int64 = 0
 	var totalEstimated int
 	
-	// 计算预估总数
-	var charsetSize int
-	switch pattern {
-	case "d":
-		charsetSize = len(numbers)
-	case "D":
-		charsetSize = len(letters)
-	case "a":
-		charsetSize = len(letters + numbers)
-	}
-	
-	totalEstimated = 1
-	for i := 0; i < length; i++ {
-		totalEstimated *= charsetSize
+	// 字典模式或传统模式的预估计算
+	if dictFile != "" {
+		// 字典模式：计算字典中的单词数量
+		if words, err := readDictionaryFile(dictFile); err != nil {
+			fmt.Printf("Error reading dictionary file: %v\n", err)
+			os.Exit(1)
+		} else {
+			totalEstimated = len(words)
+		}
+	} else {
+		// 传统模式：计算组合数量
+		var charsetSize int
+		switch pattern {
+		case "d":
+			charsetSize = len(numbers)
+		case "D":
+			charsetSize = len(letters)
+		case "a":
+			charsetSize = len(letters + numbers)
+		}
+		
+		totalEstimated = 1
+		for i := 0; i < length; i++ {
+			totalEstimated *= charsetSize
+		}
 	}
 
 	go func() {
 		defer close(domainChan)
 
-		switch pattern {
-		case "d":
-			generateCombinationsIterative(domainChan, numbers, length, suffix, regex, &generated)
-		case "D":
-			generateCombinationsIterative(domainChan, letters, length, suffix, regex, &generated)
-		case "a":
-			generateCombinationsIterative(domainChan, letters+numbers, length, suffix, regex, &generated)
-		default:
-			fmt.Println("Invalid pattern. Use -d for numbers, -D for letters, -a for alphanumeric")
-			os.Exit(1)
+		if dictFile != "" {
+			// 字典模式：从文件读取单词
+			generateFromDictionary(domainChan, dictFile, suffix, regex, &generated)
+		} else {
+			// 传统模式：生成字符组合
+			switch pattern {
+			case "d":
+				generateCombinationsIterative(domainChan, numbers, length, suffix, regex, &generated)
+			case "D":
+				generateCombinationsIterative(domainChan, letters, length, suffix, regex, &generated)
+			case "a":
+				generateCombinationsIterative(domainChan, letters+numbers, length, suffix, regex, &generated)
+			default:
+				fmt.Println("Invalid pattern. Use -d for numbers, -D for letters, -a for alphanumeric")
+				os.Exit(1)
+			}
 		}
 	}()
 
@@ -179,4 +197,64 @@ func safeRegexMatch(regex *regexp2.Regexp, input string) (bool, error) {
 	}
 
 	return match, nil
+}
+
+// readDictionaryFile 读取字典文件并返回单词列表
+func readDictionaryFile(dictFile string) ([]string, error) {
+	file, err := os.Open(dictFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open dictionary file: %w", err)
+	}
+	defer file.Close()
+
+	var words []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		word := strings.TrimSpace(scanner.Text())
+		if word != "" && !strings.Contains(word, " ") {
+			words = append(words, word)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading dictionary file: %w", err)
+	}
+
+	if len(words) == 0 {
+		return nil, fmt.Errorf("dictionary file is empty or contains no valid words")
+	}
+
+	return words, nil
+}
+
+// generateFromDictionary 从字典文件生成域名
+func generateFromDictionary(domainChan chan<- string, dictFile string, suffix string, regex *regexp2.Regexp, generated *int64) {
+	words, err := readDictionaryFile(dictFile)
+	if err != nil {
+		fmt.Printf("Error reading dictionary: %v\n", err)
+		return
+	}
+
+	for _, word := range words {
+		domain := word + suffix
+		
+		// 正则过滤（只对域名前缀进行匹配）
+		var match bool
+		if regex == nil {
+			match = true
+		} else {
+			var err error
+			match, err = safeRegexMatch(regex, word)
+			if err != nil {
+				// 正则匹配错误时跳过该域名
+				match = false
+			}
+		}
+
+		if match {
+			domainChan <- domain
+			// 使用atomic操作增加计数器
+			atomic.AddInt64(generated, 1)
+		}
+	}
 }

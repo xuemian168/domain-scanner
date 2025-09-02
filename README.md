@@ -17,6 +17,10 @@ A powerful domain name availability checker written in Go. This tool helps you f
 
 ## Features
 
+- **Dictionary Input Support**: Generate domains from word lists for practical domain checking
+  - Read dictionary files (one word per line) for word-based domain generation
+  - Smart mode detection between dictionary and pattern-based generation
+  - Regex filtering support for dictionary words
 - **Multi-method Verification**: Checks domain availability using multiple methods:
   - DNS records (NS, A, MX)
   - WHOIS information
@@ -59,6 +63,7 @@ go run main.go [options]
   - `D`: Pure letters (e.g., abc.li)
   - `a`: Alphanumeric (e.g., a1b.li)
 - `-r string`: Regex filter for domain name prefix (supports advanced regexp2 features)
+- `-dict string`: Dictionary file path (one word per line) for word-based domain generation
 - `-delay int`: Delay between queries in milliseconds (default: 1000)
 - `-workers int`: Number of concurrent workers (default: 10)
 - `-show-registered`: Show registered domains in output (default: false)
@@ -92,7 +97,17 @@ go run main.go -l 3 -s .li -p D -r "^[a-z]{2}[0-9]$"
 go run main.go -l 5 -s .li -p D -r "^abc"
 ```
 
-6. Use advanced regexp2 features (backreferences for repeating patterns):
+6. Use dictionary file for word-based domain checking:
+```bash
+go run main.go -dict words.txt -s .com
+```
+
+7. Use dictionary with regex filter for precise matching:
+```bash
+go run main.go -dict words.txt -s .com -r "^[a-z]{4,8}$"
+```
+
+8. Use advanced regexp2 features (backreferences for repeating patterns):
 ```bash
 # Find domains with pattern like "aaa", "bbb", "ccc" (same letter repeated)
 go run main.go -l 3 -s .li -p D -r "^(.)\1{2}$"
@@ -101,7 +116,7 @@ go run main.go -l 3 -s .li -p D -r "^(.)\1{2}$"
 go run main.go -l 4 -s .li -p D -r "^(..)\1$"
 ```
 
-7. Skip performance warning for large domain sets:
+9. Skip performance warning for large domain sets:
 ```bash
 go run main.go -l 7 -s .li -p D -force
 ```
@@ -261,6 +276,19 @@ git push origin feature/your-feature-name
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details. 
 
 ## Recent Updates
+
+### v1.3.4 - 2025-09-02
+- **Dictionary Input**: New `-dict` parameter for word-based domain generation from text files
+- **Smart Mode Detection**: Intelligent switching between dictionary and pattern-based generation
+- **Enhanced Flexibility**: Support for regex filtering on dictionary words for precise domain matching
+- **Practical Usage**: Enable checking of real-world domains using common word lists
+- **Documentation**: Comprehensive examples and usage guidelines for dictionary mode
+
+### v1.3.3 - 2025-09-02
+- **Performance Warnings**: Intelligent warnings for large domain scans with detailed impact analysis
+- **User Safety**: Protection against accidental multi-day scan operations with confirmation prompts
+- **Windows Fix**: Resolved critical release binary execution issues causing empty results
+- **Stability**: Fixed concurrent processing race conditions across all platforms
 
 ### v1.3.2 - 2025-08-26
 - **Security**: Added ReDoS attack protection with regex timeout (100ms)

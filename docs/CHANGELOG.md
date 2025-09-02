@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [1.3.4] - 2025-09-02
+
+### Added
+- **Dictionary Input Support**: New `-dict` parameter for word-based domain generation from text files
+- **Word-Based Domain Generation**: Support for reading dictionary files (one word per line) for practical domain checking
+- **Smart Mode Detection**: Intelligent detection between dictionary mode and traditional pattern mode
+- **Dictionary Regex Filtering**: Apply regex filters to dictionary words for precise domain matching
+
+### Changed
+- **Help Documentation**: Updated with comprehensive dictionary usage examples and parameter explanations
+- **Command Interface**: Added `-dict` parameter with automatic mode switching and user guidance
+
+### Technical Improvements
+- **Dictionary Architecture**: Implemented `readDictionaryFile()` and `generateFromDictionary()` functions with robust error handling
+- **Unified Generation**: Extended `GenerateDomains()` to seamlessly support both traditional pattern and dictionary modes
+- **Memory Efficient**: Dictionary processing uses streaming architecture with same performance characteristics as pattern mode
+- **Input Validation**: Automatic filtering of invalid dictionary entries (empty lines, spaces) with comprehensive error reporting
+
 ## [1.3.3] - 2025-09-02
 
 ### Added

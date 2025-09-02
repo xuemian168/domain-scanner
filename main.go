@@ -27,6 +27,7 @@ func printHelp() {
 	fmt.Println("              D: Pure letters (e.g., abc.li)")
 	fmt.Println("              a: Alphanumeric (e.g., a1b.li)")
 	fmt.Println("  -r string   Regex filter for domain name prefix")
+	fmt.Println("  -dict string Dictionary file path (one word per line)")
 	fmt.Println("  -delay int  Delay between queries in milliseconds (default: 1000)")
 	fmt.Println("  -workers int Number of concurrent workers (default: 10)")
 	fmt.Println("  -show-registered Show registered domains in output (default: false)")
@@ -43,7 +44,11 @@ func printHelp() {
 	fmt.Println("     go run main.go -l 3 -s .li -p D -r \"^[a-z]{2}[0-9]$\"")
 	fmt.Println("\n  5. Find domains starting with specific letters:")
 	fmt.Println("     go run main.go -l 5 -s .li -p D -r \"^abc\"")
-	fmt.Println("\n  6. Skip performance warning for large domain sets:")
+	fmt.Println("\n  6. Use dictionary file to check word-based domains:")
+	fmt.Println("     go run main.go -dict words.txt -s .com")
+	fmt.Println("\n  7. Use dictionary with regex filter:")
+	fmt.Println("     go run main.go -dict words.txt -s .com -r \"^[a-z]{4,8}$\"")
+	fmt.Println("\n  8. Skip performance warning for large domain sets:")
 	fmt.Println("     go run main.go -l 7 -s .li -p D -force")
 }
 
@@ -115,7 +120,7 @@ func confirmContinue() bool {
 func showMOTD() {
 	fmt.Println("\033[1;36m") // Cyan color
 	fmt.Println("╔════════════════════════════════════════════════════════════╗")
-	fmt.Println("║                    Domain Scanner v1.3.3                   ║")
+	fmt.Println("║                    Domain Scanner v1.3.4                   ║")
 	fmt.Println("║                                                            ║")
 	fmt.Println("║  A powerful tool for checking domain name availability     ║")
 	fmt.Println("║                                                            ║")
@@ -138,6 +143,7 @@ func main() {
 	suffix := flag.String("s", ".li", "Domain suffix")
 	pattern := flag.String("p", "D", "Domain pattern (d: numbers, D: letters, a: alphanumeric)")
 	regexFilter := flag.String("r", "", "Regex filter for domain names")
+	dictFile := flag.String("dict", "", "Dictionary file path (one word per line)")
 	delay := flag.Int("delay", 1000, "Delay between queries in milliseconds")
 	workers := flag.Int("workers", 10, "Number of concurrent workers")
 	showRegistered := flag.Bool("show-registered", false, "Show registered domains in output")
@@ -155,17 +161,27 @@ func main() {
 		*suffix = "." + *suffix
 	}
 
-	// Performance warning for large domain sets
-	if *length > 5 && !*force {
-		showPerformanceWarning(*length, *pattern, *delay, *workers)
-		if !confirmContinue() {
-			fmt.Println("Scan cancelled by user.")
-			os.Exit(0)
+	// Validate input modes
+	if *dictFile != "" && (*length != 3 || *pattern != "D") {
+		// Dictionary mode: length and pattern are ignored, but inform user
+		if *length != 3 || *pattern != "D" {
+			fmt.Printf("Note: When using dictionary mode, -l and -p parameters are ignored\n")
 		}
-		fmt.Println()
+	} else if *dictFile != "" {
+		// Pure dictionary mode
+	} else {
+		// Traditional pattern mode - apply performance warning
+		if *length > 5 && !*force {
+			showPerformanceWarning(*length, *pattern, *delay, *workers)
+			if !confirmContinue() {
+				fmt.Println("Scan cancelled by user.")
+				os.Exit(0)
+			}
+			fmt.Println()
+		}
 	}
 
-	domainGen := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter)
+	domainGen := generator.GenerateDomains(*length, *suffix, *pattern, *regexFilter, *dictFile)
 	domainChan := domainGen.Domains
 	availableDomains := []string{}
 	registeredDomains := []string{}
