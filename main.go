@@ -198,9 +198,14 @@ func main() {
 	jobs := make(chan string, 1000)
 	results := make(chan types.DomainResult, 1000)
 
-	// Start workers
+	// Start workers with WaitGroup
+	var workerWg sync.WaitGroup
 	for w := 1; w <= *workers; w++ {
-		go worker.Worker(w, jobs, results, time.Duration(*delay)*time.Millisecond)
+		workerWg.Add(1)
+		go func(id int) {
+			defer workerWg.Done()
+			worker.Worker(id, jobs, results, time.Duration(*delay)*time.Millisecond)
+		}(w)
 	}
 
 	// Send jobs from domain generator
@@ -247,15 +252,10 @@ func main() {
 		close(statusChan)
 	}()
 
-	// 监控任务完成 - 等待所有jobs处理完成后关闭results
+	// 监控任务完成 - 等待所有worker完成后关闭results
 	go func() {
-		// 等待所有域名生成完成（jobs channel关闭）
-		for range jobs {
-			// 当jobs channel关闭时，这个循环会结束
-		}
-
-		// 给所有worker足够的时间处理剩余的任务
-		time.Sleep(3 * time.Second)
+		// 等待所有worker完成
+		workerWg.Wait()
 
 		// 关闭results channel，结束结果收集
 		close(results)
