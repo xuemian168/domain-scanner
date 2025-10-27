@@ -22,6 +22,8 @@ var (
 	whoisServers = []string{
 		"", // Default flow (IANA lookup)
 		"whois.nic.li:43",
+		"whois.nic.cx:43",        // Christmas Island
+		"whois.nic.cz:43",        // Czech Republic
 		"whois.verisign-grs.com:43",
 		"whois.porkbun.com:43",
 		"whois.godaddy.com:43",
@@ -163,6 +165,28 @@ var (
 		"eligible for registration", "free for registration", "open for registration",
 		"ready for registration", "registration available", "status code: 210",
 		"status code: 220", "response: 210", "response: 220",
+		// .cx specific indicators
+		"the queried object does not exist: no object found",
+		"the queried object does not exist",
+		// .cz specific indicators
+		"%error:101: no entries found",
+		"%error:101",
+	}
+
+	// Error indicators that should NOT be treated as "available"
+	// These indicate service issues, not domain availability
+	serviceErrorIndicators = []string{
+		"the domain name search is temporarily unavailable",
+		"temporarily unavailable",
+		"service unavailable",
+		"please try again later",
+		"requests of this client are not permitted",
+		"too many requests",
+		"rate limit exceeded",
+		"query limit exceeded",
+		"access denied",
+		"connection timeout",
+		"service timeout",
 	}
 
 	unavailableIndicators = []string{
@@ -175,11 +199,20 @@ var (
 		"admin contact:", "tech contact:", "billing contact:", "dnssec:",
 		"domain servers in listed order:", "registered domain", "registered on:",
 		"expires on:", "last updated on:", "changed:", "holder:", "person:",
-		"sponsoring registrar:", "whois server:", "referral url:", "domain name:",
+		"sponsoring registrar:", "whois server:", "referral url:",
 		"registry domain id:", "registrar whois server:", "registrar url:",
 		"registrar iana id:", "registrar abuse contact email:",
 		"registrar abuse contact phone:", "reseller:", "domain status:",
-		"name server", "dnssec: unsigned", "dnssec: signed",
+		"dnssec: unsigned", "dnssec: signed",
+		// .cx specific indicators
+		"registry expiry date:",
+		"domain status: active",
+		"registrar url:",
+		// .cz specific indicators
+		"registered:",
+		"expire:",
+		"nsset:",
+		"admin-c:",
 	}
 )
 
@@ -316,6 +349,7 @@ func CheckDomainAvailability(domain string) (bool, error) {
 func checkWHOISAvailability(domain string) (bool, error) {
 	maxRetries := 3
 	baseDelay := 2 * time.Second
+	foundAnyResult := false
 
 	for _, server := range whoisServers {
 		for i := 0; i < maxRetries; i++ {
@@ -328,14 +362,22 @@ func checkWHOISAvailability(domain string) (bool, error) {
 			}
 
 			if err == nil && result != "" {
+				foundAnyResult = true
 				resultLower := strings.ToLower(result)
 
-				// Check for available indicators
+				// FIRST: Check for service errors (should NOT be treated as "available")
+				if isServiceError(resultLower) {
+					// Service error - treat as unavailable to prevent false positives
+					return false, nil
+				}
+
+				// SECOND: Check for available indicators
+				// Only return true if we have explicit "available" signal
 				if isAvailableFromWHOIS(resultLower) {
 					return true, nil
 				}
 
-				// Check for unavailable indicators (check both original and lowercase)
+				// THIRD: Check for unavailable indicators (check both original and lowercase)
 				if isUnavailableFromWHOIS(result) || isUnavailableFromWHOIS(resultLower) {
 					return false, nil
 				}
@@ -354,8 +396,17 @@ func checkWHOISAvailability(domain string) (bool, error) {
 		}
 	}
 
-	// Default to available if no clear indication
-	return true, nil
+	// CRITICAL CHANGE: Conservative approach to prevent false positives
+	// Default to UNAVAILABLE if no clear indication
+	// Better to miss a potentially available domain than to report a registered one as available
+	if !foundAnyResult {
+		// No WHOIS data could be retrieved - assume domain is NOT available
+		return false, nil
+	}
+
+	// WHOIS data was retrieved but couldn't determine status
+	// Apply conservative approach: assume NOT available to prevent false positives
+	return false, nil
 }
 
 func isAvailableFromWHOIS(result string) bool {
@@ -400,5 +451,15 @@ func isUnavailableFromWHOIS(result string) bool {
 		}
 	}
 
+	return false
+}
+
+func isServiceError(result string) bool {
+	// Check for service error indicators that should NOT be treated as "available"
+	for _, indicator := range serviceErrorIndicators {
+		if strings.Contains(result, indicator) {
+			return true
+		}
+	}
 	return false
 }
